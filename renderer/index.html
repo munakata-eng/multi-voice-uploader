@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音声登録できるくん</title>
+    <!-- Google Fonts: Inter & Noto Sans JP -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+        rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'Noto Sans JP', 'sans-serif']
+                    },
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        },
+                        // Dark mode specific overrides if needed
+                        slate: {
+                            850: '#1e293b', // Custom slightly lighter than 900
+                            950: '#020617', // Darker background
+                        }
+                    },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
+                    },
+                    animation: {
+                        'fadeIn': 'fadeIn 0.3s ease-in-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="bg-slate-950 font-sans antialiased text-slate-200 selection:bg-blue-500/30 selection:text-blue-200">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header
+            class="sticky top-0 z-30 w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-800 shadow-sm transition-all duration-300">
+            <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
+                <h1 class="text-2xl font-bold text-white flex items-center gap-3 tracking-tight">
+                    <div
+                        class="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg text-white shadow-lg shadow-blue-500/20">
+                        <i data-lucide="mic" class="w-6 h-6"></i>
+                    </div>
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                        音声登録できるくん
+                    </span>
+                </h1>
+                <div class="flex items-center space-x-3">
+                    <button id="openStandfmBtn"
+                        class="group bg-green-500/10 hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/20 text-green-400 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 border border-green-500/20 hover:border-transparent">
+                        <i data-lucide="radio" class="w-4 h-4 transition-transform group-hover:scale-110"></i>
+                        Stand.fm
+                    </button>
+                    <button id="openVoicyBtn"
+                        class="group bg-purple-500/10 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/20 text-purple-400 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 border border-purple-500/20 hover:border-transparent">
+                        <i data-lucide="mic" class="w-4 h-4 transition-transform group-hover:scale-110"></i>
+                        Voicy
+                    </button>
+                    <div class="h-6 w-px bg-slate-700 mx-2"></div>
+                    <button id="addFileBtn"
+                        class="group bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-all duration-300 flex items-center gap-2 transform hover:-translate-y-0.5 active:translate-y-0">
+                        <i data-lucide="folder-plus" class="w-4 h-4 transition-transform group-hover:scale-110"></i>
+                        音声ファイルを追加
+                    </button>
+                    <button id="refreshBtn"
+                        class="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all duration-200 active:bg-slate-700"
+                        title="更新">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-7xl mx-auto px-6 py-8 w-full">
+            <!-- Filters & Tabs Container -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <!-- Tabs Root -->
+                <div class="tabs-root flex-1 overflow-hidden">
+                    <div id="yearMonthTabs"
+                        class="inline-flex h-12 items-center justify-start rounded-xl bg-slate-900 p-1.5 shadow-sm border border-slate-800 w-auto overflow-x-auto ring-1 ring-white/5 items-center gap-1">
+                        <!-- タブはJavaScriptで動的に生成 -->
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div
+                    class="flex items-center space-x-4 bg-slate-900 px-4 py-2.5 rounded-xl shadow-sm border border-slate-800 ring-1 ring-white/5">
+                    <label class="flex items-center space-x-2.5 cursor-pointer group select-none">
+                        <div class="relative flex items-center">
+                            <input type="checkbox" id="filterNoText" class="peer sr-only">
+                            <div
+                                class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 shadow-inner">
+                            </div>
+                        </div>
+                        <span
+                            class="text-xs font-semibold text-slate-400 group-hover:text-slate-200 transition-colors">文字起こし未完了</span>
+                    </label>
+                    <div class="h-4 w-px bg-slate-700"></div>
+                    <label class="flex items-center space-x-2.5 cursor-pointer group select-none">
+                        <div class="relative flex items-center">
+                            <input type="checkbox" id="filterUnpublished" class="peer sr-only">
+                            <div
+                                class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 shadow-inner">
+                            </div>
+                        </div>
+                        <span
+                            class="text-xs font-semibold text-slate-400 group-hover:text-slate-200 transition-colors">未投稿のみ</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- File List -->
+            <div id="fileList" class="grid grid-cols-1 gap-4">
+                <div
+                    class="text-center py-20 bg-slate-900/50 rounded-3xl border border-dashed border-slate-700 backdrop-blur-sm">
+                    <div
+                        class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 text-slate-500 mb-4 animate-pulse">
+                        <i data-lucide="folder-search" class="w-8 h-8"></i>
+                    </div>
+                    <p class="text-slate-400 font-medium">音声ファイルを読み込み中...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- モーダルダイアログ -->
+    <div id="editModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"
+        aria-hidden="true">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" onclick="closeEditModal()">
+        </div>
+
+        <!-- Modal Content -->
+        <div
+            class="relative bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300 ring-1 ring-white/10">
+            <div class="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50">
+                <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <span class="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg"><i data-lucide="edit-3"
+                            class="w-5 h-5"></i></span>
+                    ファイル情報編集
+                </h2>
+                <button
+                    class="close p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-full transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6">
+                <form id="editForm" class="space-y-5">
+                    <div class="space-y-1.5">
+                        <label for="editTitle"
+                            class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">タイトル</label>
+                        <input type="text" id="editTitle" name="title" placeholder="タイトルを入力"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-200 font-medium placeholder-slate-600">
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="editDate"
+                            class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">投稿日</label>
+                        <input type="date" id="editDate" name="publishDate"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-200 font-medium dark-date-input">
+                    </div>
+
+                    <div class="space-y-3 pt-2">
+                        <label
+                            class="flex items-center p-3 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors group select-none">
+                            <input type="checkbox" id="editStandfm" name="standfmPublished"
+                                class="w-5 h-5 text-blue-500 border-slate-600 rounded focus:ring-blue-500 bg-slate-900">
+                            <span
+                                class="ml-3 text-sm font-medium text-slate-300 group-hover:text-slate-100">stand.fm投稿済み</span>
+                        </label>
+
+                        <label
+                            class="flex items-center p-3 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors group select-none">
+                            <input type="checkbox" id="editVoicy" name="voicyPublished"
+                                class="w-5 h-5 text-blue-500 border-slate-600 rounded focus:ring-blue-500 bg-slate-900">
+                            <span
+                                class="ml-3 text-sm font-medium text-slate-300 group-hover:text-slate-100">Voicy投稿済み</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 p-6 border-t border-slate-800 bg-slate-900/50">
+                <button type="button" id="cancelEdit"
+                    class="px-5 py-2.5 text-slate-400 bg-slate-900 border border-slate-700 hover:bg-slate-800 rounded-xl text-sm font-semibold transition-colors shadow-sm active:bg-slate-800">
+                    キャンセル
+                </button>
+                <button type="button" id="saveEdit"
+                    class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-500/30 active:scale-95 transform">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Voicy投稿設定モーダル -->
+    <div id="voicyPublishModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"
+        aria-hidden="true">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+            onclick="closeVoicyPublishModal()"></div>
+
+        <!-- Modal Content -->
+        <div
+            class="relative bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden ring-1 ring-white/10 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50 shrink-0">
+                <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <span class="p-1.5 bg-purple-500/20 text-purple-400 rounded-lg"><i data-lucide="mic-2"
+                            class="w-5 h-5"></i></span>
+                    Voicy投稿設定
+                </h2>
+                <button
+                    class="closeVoicy p-1.5 text-slate-400 hover:text-slate-300 hover:bg-slate-800 rounded-full transition-colors"
+                    onclick="closeVoicyPublishModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="voicyPublishForm" class="space-y-5">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="voicyBroadcastTitle"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">放送タイトル</label>
+                            <button type="button" id="saveVoicyBroadcastTitleDefaultBtn"
+                                class="text-[10px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <input type="text" id="voicyBroadcastTitle" name="broadcastTitle" placeholder="放送タイトルを入力"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium placeholder-slate-600">
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="voicyDescription"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">放送の説明</label>
+                            <button type="button" id="saveVoicyDescriptionDefaultBtn"
+                                class="text-[10px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <textarea id="voicyDescription" name="description" rows="3"
+                            placeholder="放送内容の紹介、こんな方にオススメ、参考リンクなどを入力"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium placeholder-slate-600 resize-none"></textarea>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="voicyChapterTitle"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">チャプタータイトル</label>
+                            <button type="button" id="saveVoicyTitleDefaultBtn"
+                                class="text-[10px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <input type="text" id="voicyChapterTitle" name="chapterTitle" value="創理公式サイトはこちら"
+                            placeholder="チャプタータイトルを入力"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium placeholder-slate-600">
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="voicyChapterUrl"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">URL</label>
+                            <button type="button" id="saveVoicyUrlDefaultBtn"
+                                class="text-[10px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <input type="text" id="voicyChapterUrl" name="chapterUrl"
+                            value="https://vibe-coding.munakata-engineer.com/" placeholder="https://..."
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium placeholder-slate-600">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label for="voicyPublishDate"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">公開日</label>
+                            <input type="date" id="voicyPublishDate" name="publishDate"
+                                class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium cursor-pointer dark-date-input">
+                        </div>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <label for="voicyPublishTime"
+                                    class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">公開時間</label>
+                                <button type="button" id="saveVoicyTimeDefaultBtn"
+                                    class="text-[10px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                    <i data-lucide="save" class="w-3 h-3"></i>
+                                    デフォルトとして保存
+                                </button>
+                            </div>
+                            <input type="time" id="voicyPublishTime" name="publishTime" value="06:30"
+                                class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium cursor-pointer dark-time-input">
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="voicyHashtags"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">ハッシュタグ</label>
+                            <button type="button" id="saveVoicyDefaultBtn"
+                                class="text-[10px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <textarea id="voicyHashtags" name="hashtags" rows="2"
+                            placeholder="AIプログラミング VibeCoding むなかた総理 (スペース区切り)"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-slate-200 font-medium placeholder-slate-600 resize-none"></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 p-6 border-t border-slate-800 bg-slate-900/50 shrink-0">
+                <button type="button"
+                    class="px-5 py-2.5 text-slate-400 bg-slate-900 border border-slate-700 hover:bg-slate-800 rounded-xl text-sm font-semibold transition-colors shadow-sm active:bg-slate-800"
+                    onclick="closeVoicyPublishModal()">
+                    キャンセル
+                </button>
+                <button type="button" id="confirmVoicyPublishBtn"
+                    class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-purple-500/30 active:scale-95 transform flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    投稿する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stand.fm投稿設定モーダル -->
+    <div id="standfmPublishModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"
+        aria-hidden="true">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+            onclick="closeStandfmPublishModal()"></div>
+
+        <!-- Modal Content -->
+        <div
+            class="relative bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300 ring-1 ring-white/10 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50 shrink-0">
+                <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <span class="p-1.5 bg-yellow-500/20 text-yellow-400 rounded-lg"><i data-lucide="radio"
+                            class="w-5 h-5"></i></span>
+                    stand.fm投稿設定
+                </h2>
+                <button
+                    class="custom-close-btn p-1.5 text-slate-400 hover:text-slate-300 hover:bg-slate-800 rounded-full transition-colors"
+                    onclick="closeStandfmPublishModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="standfmPublishForm" class="space-y-5">
+                    <div class="space-y-1.5">
+                        <label for="standfmBroadcastTitle"
+                            class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">放送タイトル</label>
+                        <input type="text" id="standfmBroadcastTitle" name="broadcastTitle" placeholder="タイトルを入力"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-200 font-medium placeholder-slate-600">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label for="standfmPublishDate"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">公開日</label>
+                            <input type="date" id="standfmPublishDate" name="publishDate"
+                                class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-200 font-medium cursor-pointer dark-date-input">
+                        </div>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <label for="standfmPublishTime"
+                                    class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">公開時間</label>
+                                <button type="button" id="saveStandfmTimeDefaultBtn"
+                                    class="text-[10px] text-yellow-400 hover:text-yellow-300 font-bold bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                    <i data-lucide="save" class="w-3 h-3"></i>
+                                    デフォルトとして保存
+                                </button>
+                            </div>
+                            <input type="time" id="standfmPublishTime" name="publishTime" value="06:10"
+                                class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-200 font-medium cursor-pointer dark-time-input">
+                        </div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="standfmBgm"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">BGM</label>
+                            <button type="button" id="saveStandfmBgmDefaultBtn"
+                                class="text-[10px] text-yellow-400 hover:text-yellow-300 font-bold bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <select id="standfmBgm" name="bgm"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-200 font-medium cursor-pointer appearance-none">
+                            <option value="">なし</option>
+                            <option value="Funny Smile">Funny Smile</option>
+                            <option value="Radio Theme">Radio Theme</option>
+                            <option value="8-Bit Game">8-Bit Game</option>
+                            <option value="Sunset City">Sunset City</option>
+                            <option value="Piano House">Piano House</option>
+                            <option value="Good Old Disco">Good Old Disco</option>
+                            <option value="Fog Illusion">Fog Illusion</option>
+                            <option value="Nature Garden">Nature Garden</option>
+                            <option value="Mysterious">Mysterious</option>
+                            <option value="Sleep Time">Sleep Time</option>
+                            <option value="Bossa Nova">Bossa Nova</option>
+                            <option value="Chill Out">Chill Out</option>
+                            <option value="Dreaming">Dreaming</option>
+                            <option value="Local Coffee Shop">Local Coffee Shop</option>
+                            <option value="Shisha Flavors">Shisha Flavors</option>
+                            <option value="Healing Piano">Healing Piano</option>
+                            <option value="Summer Chill">Summer Chill</option>
+                            <option value="Samuke">Samuke</option>
+                            <option value="Diner">Diner</option>
+                            <option value="Techno City">Techno City</option>
+                            <option value="Upbeat">Upbeat</option>
+                            <option value="80s Club Jazz">80s Club Jazz</option>
+                            <option value="Cool Electro">Cool Electro</option>
+                            <option value="Summer Ocean">Summer Ocean</option>
+                            <option value="Funky Jam">Funky Jam</option>
+                            <option value="Lucky Day">Lucky Day</option>
+                            <option value="With Me">With Me</option>
+                            <option value="Dancing">Dancing</option>
+                            <option value="Sleeping Forest">Sleeping Forest</option>
+                            <option value="Resort">Resort</option>
+                            <option value="Hinode">Hinode</option>
+                            <option value="Passion">Passion</option>
+                            <option value="Midnight">Midnight</option>
+                            <option value="Toy Box">Toy Box</option>
+                            <option value="Morning">Morning</option>
+                            <option value="Good Sunday">Good Sunday</option>
+                            <option value="After School">After School</option>
+                            <option value="Home Cooking">Home Cooking</option>
+                            <option value="Skip Day">Skip Day</option>
+                            <option value="Touring">Touring</option>
+                            <option value="See You Again">See You Again</option>
+                            <option value="All Right!">All Right!</option>
+                            <option value="Earth">Earth</option>
+                            <option value="Morning Glow">Morning Glow</option>
+                            <option value="Ayumi">Ayumi</option>
+                            <option value="Morning Routine">Morning Routine</option>
+                            <option value="Ragga Rainbow">Ragga Rainbow</option>
+                            <option value="Sunday Evening">Sunday Evening</option>
+                            <option value="Phantom">Phantom</option>
+                            <option value="Ocean">Ocean</option>
+                            <option value="Cutie Smile">Cutie Smile</option>
+                            <option value="Local Line">Local Line</option>
+                            <option value="Peach">Peach</option>
+                            <option value="Rainy Days">Rainy Days</option>
+                            <option value="Small House In The Forest">Small House In The Forest</option>
+                            <option value="Summer Cycling">Summer Cycling</option>
+                            <option value="Kinder Land">Kinder Land</option>
+                            <option value="Boom Boom Boom">Boom Boom Boom</option>
+                            <option value="Theme Park">Theme Park</option>
+                            <option value="Future Paradise">Future Paradise</option>
+                            <option value="Electric Girl">Electric Girl</option>
+                            <option value="Step And Go!">Step And Go!</option>
+                            <option value="After The Rain">After The Rain</option>
+                            <option value="Breath">Breath</option>
+                            <option value="Three Tree">Three Tree</option>
+                            <option value="Moonlit Night Road">Moonlit Night Road</option>
+                            <option value="Water Surface">Water Surface</option>
+                            <option value="Feelings Of The Piano">Feelings Of The Piano</option>
+                            <option value="Sunrise">Sunrise</option>
+                            <option value="Good Bye">Good Bye</option>
+                            <option value="Moonlight">Moonlight</option>
+                            <option value="Dream">Dream</option>
+                            <option value="Morning Time">Morning Time</option>
+                            <option value="Dance Room">Dance Room</option>
+                            <option value="Old Radio">Old Radio</option>
+                            <option value="Up Down Heart">Up Down Heart</option>
+                            <option value="Inishie">Inishie</option>
+                            <option value="Deep Forest">Deep Forest</option>
+                            <option value="Dancing Room">Dancing Room</option>
+                            <option value="Space Time">Space Time</option>
+                            <option value="No More Cry">No More Cry</option>
+                            <option value="Milk Tea">Milk Tea</option>
+                            <option value="Summer Wave">Summer Wave</option>
+                            <option value="Thinking">Thinking</option>
+                            <option value="Toys City">Toys City</option>
+                            <option value="Lunch Time">Lunch Time</option>
+                            <option value="Cooking Time">Cooking Time</option>
+                            <option value="Tea Time">Tea Time</option>
+                            <option value="Smiley">Smiley</option>
+                            <option value="Kick Off">Kick Off</option>
+                            <option value="Bar">Bar</option>
+                            <option value="Hometown">Hometown</option>
+                            <option value="Earth Breath">Earth Breath</option>
+                            <option value="Riverside Wind">Riverside Wind</option>
+                            <option value="Dolphins Ocean">Dolphins Ocean</option>
+                            <option value="Guitar By The Sea">Guitar By The Sea</option>
+                            <option value="Door To Dreams">Door To Dreams</option>
+                            <option value="Country Girl">Country Girl</option>
+                            <option value="Cape Of Good Hope">Cape Of Good Hope</option>
+                            <option value="Sunset On Back">Sunset On Back</option>
+                            <option value="Beautiful Life">Beautiful Life</option>
+                            <option value="Origami">Origami</option>
+                            <option value="Quartetto">Quartetto</option>
+                            <option value="Guitar Sun Bathing">Guitar Sun Bathing</option>
+                            <option value="Fighting Soul">Fighting Soul</option>
+                            <option value="Let's Play Bar">Let's Play Bar</option>
+                            <option value="Jazz Club">Jazz Club</option>
+                            <option value="Night Walk">Night Walk</option>
+                            <option value="Shooting Star">Shooting Star</option>
+                            <option value="Pop Town">Pop Town</option>
+                            <option value="Southern">Southern</option>
+                            <option value="Halloween Night">Halloween Night</option>
+                            <option value="Trick Or Treat">Trick Or Treat</option>
+                            <option value="Autumn Nova">Autumn Nova</option>
+                            <option value="On The Way Home">On The Way Home</option>
+                            <option value="Happy X'mas">Happy X'mas</option>
+                            <option value="Snow Scene">Snow Scene</option>
+                            <option value="「Home」by Ryota Hiratsuka">「Home」by Ryota Hiratsuka</option>
+                            <option value="「small time」by R8boy">「small time」by R8boy</option>
+                            <option value="「City Nights」by Yon Selta">「City Nights」by Yon Selta</option>
+                            <option value="「Night Bubbles」by R8boy">「Night Bubbles」by R8boy</option>
+                            <option value="「SHINE」by RINZO">「SHINE」by RINZO</option>
+                            <option value="「The Walk」by eba（cadode）">「The Walk」by eba（cadode）</option>
+                            <option value="「Arcade」by Ryota Hiratsuka">「Arcade」by Ryota Hiratsuka</option>
+                            <option value="「Imagination」by MONJOE">「Imagination」by MONJOE</option>
+                            <option value="「Palmtree」by Ryota Hiratsuka">「Palmtree」by Ryota Hiratsuka</option>
+                            <option value="「Sweet love」by RINZO">「Sweet love」by RINZO</option>
+                            <option value="「Strato!」by Yon Selta">「Strato!」by Yon Selta</option>
+                            <option value="「Breathing」by Yon Selta">「Breathing」by Yon Selta</option>
+                            <option value="「Morning Sun」by eba（cadode）">「Morning Sun」by eba（cadode）</option>
+                            <option value="「Travelers」by MONJOE">「Travelers」by MONJOE</option>
+                            <option value="「be light up」by Masashi Hasegawa">「be light up」by Masashi Hasegawa</option>
+                            <option value="「Glitter」by RINZO">「Glitter」by RINZO</option>
+                            <option value="「Rue brune」 by Masashi Hasegawa">「Rue brune」 by Masashi Hasegawa</option>
+                            <option value="「New Game」 by MONJOE">「New Game」 by MONJOE</option>
+                            <option value="「RVM」 by Masashi Hasegawa">「RVM」 by Masashi Hasegawa</option>
+                            <option value="「Home（Long Ver.）」 by Ryota Hiratsuka">「Home（Long Ver.）」 by Ryota Hiratsuka
+                            </option>
+                            <option value="「small time（Long Ver.）」 by R8boy">「small time（Long Ver.）」 by R8boy</option>
+                            <option value="「Night Bubbles（Long Ver.）」 by R8boy">「Night Bubbles（Long Ver.）」 by R8boy
+                            </option>
+                            <option value="「The Walk（long ver.）」 by eba（cadode）">「The Walk（long ver.）」 by eba（cadode）
+                            </option>
+                            <option value="「Dusk in the City」 by R8boy">「Dusk in the City」 by R8boy</option>
+                            <option value="「Arcade（Long Ver.）」 by Ryota Hiratsuka">「Arcade（Long Ver.）」 by Ryota
+                                Hiratsuka</option>
+                            <option value="「Into the Clouds」 by R8boy">「Into the Clouds」 by R8boy</option>
+                            <option value="「Your story」 by R8boy">「Your story」 by R8boy</option>
+                            <option value="「WABISABI」 by eba（cadode）">「WABISABI」 by eba（cadode）</option>
+                            <option value="「butterfly effect」 by R8boy">「butterfly effect」 by R8boy</option>
+                            <option value="「Morning Sun（Long Ver.）」 by eba（cadode）">「Morning Sun（Long Ver.）」 by
+                                eba（cadode）</option>
+                            <option value="「Chocolate」 by Ryota Hiratsuka">「Chocolate」 by Ryota Hiratsuka</option>
+                            <option value="「Free」 by Ryota Hiratsuka">「Free」 by Ryota Hiratsuka</option>
+                            <option value="「Reverse」 by Ryota Hiratsuka">「Reverse」 by Ryota Hiratsuka</option>
+                            <option value="「Juice」 by Ryota Hiratsuka">「Juice」 by Ryota Hiratsuka</option>
+                            <option value="「Bassman」 by R8boy">「Bassman」 by R8boy</option>
+                            <option value="「Arrive」 by Ryota Hiratsuka">「Arrive」 by Ryota Hiratsuka</option>
+                            <option value="「You may be awoken」 by Takada Fu">「You may be awoken」 by Takada Fu</option>
+                            <option value="「JUNCTION」 by ayukoma">「JUNCTION」 by ayukoma</option>
+                            <option value="「flower」 by ayukoma">「flower」 by ayukoma</option>
+                            <option value="「SURFIN BOYS」 by Professor T">「SURFIN BOYS」 by Professor T</option>
+                            <option value="「sympathy」 by teleske">「sympathy」 by teleske</option>
+                            <option value="「biriyani」 by teleske">「biriyani」 by teleske</option>
+                            <option value="「NIGHT FUNK」 by Professor T">「NIGHT FUNK」 by Professor T</option>
+                            <option value="「teenage Party」 by TAIKI KIKUCHI">「teenage Party」 by TAIKI KIKUCHI</option>
+                            <option value="「ChuMei」 by teleske">「ChuMei」 by teleske</option>
+                            <option value="「SUNDAY MORNING」 by Professor T">「SUNDAY MORNING」 by Professor T</option>
+                            <option value="「Summer Memories」 by TAIKI KIKUCHI">「Summer Memories」 by TAIKI KIKUCHI
+                            </option>
+                            <option value="「Country Morning」 by TAIKI KIKUCHI">「Country Morning」 by TAIKI KIKUCHI
+                            </option>
+                            <option value="「I'm down on the ground」 by Takada Fu">「I'm down on the ground」 by Takada Fu
+                            </option>
+                            <option value="「Where you once belonged」 by Takada Fu">「Where you once belonged」 by Takada
+                                Fu</option>
+                            <option value="「interchange」 by ayukoma">「interchange」 by ayukoma</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="standfmCategory"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">カテゴリ</label>
+                            <button type="button" id="saveStandfmCategoryDefaultBtn"
+                                class="text-[10px] text-yellow-400 hover:text-yellow-300 font-bold bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <select id="standfmCategory" name="category"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-200 font-medium cursor-pointer appearance-none">
+                            <option value="ミュージック">ミュージック</option>
+                            <option value="エンタメ">エンタメ</option>
+                            <option value="スポーツ">スポーツ</option>
+                            <option value="カルチャー">カルチャー</option>
+                            <option value="クリエイティブ・テック">クリエイティブ・テック</option>
+                            <option value="ビジネス">ビジネス</option>
+                            <option value="ライフスタイル・生活">ライフスタイル・生活</option>
+                            <option value="恋愛">恋愛</option>
+                            <option value="美容・メイク">美容・メイク</option>
+                            <option value="トーク・雑談">トーク・雑談</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">放送画像</label>
+                        <div class="flex items-center gap-3">
+                            <div id="standfmImageContainer"
+                                class="flex-1 flex items-center gap-3 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl min-h-[52px]">
+                                <span id="standfmImageStatus" class="text-sm text-slate-500">未設定</span>
+                                <img id="standfmImagePreview"
+                                    class="h-10 w-10 object-cover rounded-md hidden shadow-sm border border-slate-700 bg-slate-800"
+                                    src="" alt="Preview">
+                                <div id="standfmImageInfo" class="flex flex-col hidden overflow-hidden">
+                                    <span class="text-xs font-bold text-slate-300">設定済み</span>
+                                    <span id="standfmImageName"
+                                        class="text-[10px] text-slate-500 font-mono truncate max-w-[120px]"></span>
+                                </div>
+                            </div>
+
+                            <input type="file" id="standfmImageInput" accept="image/*" class="hidden">
+
+                            <div class="flex items-center gap-1">
+                                <button type="button" id="selectStandfmImageBtn"
+                                    class="px-3 py-2.5 bg-slate-800 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center gap-1.5">
+                                    <i data-lucide="image" class="w-4 h-4"></i>
+                                    選択
+                                </button>
+                                <button type="button" id="clearStandfmImageBtn"
+                                    class="px-3 py-2.5 bg-slate-800 border border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 rounded-xl text-sm font-bold transition-all shadow-sm hidden">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500">※事前に設定したデフォルト画像が使用されます</p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="standfmDescription"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">放送の説明</label>
+                            <button type="button" id="saveStandfmDescriptionDefaultBtn"
+                                class="text-[10px] text-yellow-400 hover:text-yellow-300 font-bold bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <textarea id="standfmDescription" name="description" rows="5" placeholder="放送の概要・ハッシュタグ・補足情報など"
+                            class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-200 font-medium placeholder-slate-600 resize-none leading-relaxed"></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 p-6 border-t border-slate-800 bg-slate-900/50 shrink-0">
+                <button type="button"
+                    class="px-5 py-2.5 text-slate-400 bg-slate-900 border border-slate-700 hover:bg-slate-800 rounded-xl text-sm font-semibold transition-colors shadow-sm active:bg-slate-800"
+                    onclick="closeStandfmPublishModal()">
+                    キャンセル
+                </button>
+                <button type="button" id="confirmStandfmPublishBtn"
+                    class="px-5 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-yellow-500/30 active:scale-95 transform flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    投稿する
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="renderer.js"></script>
+    <script>
+        // Lucideアイコンを初期化
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

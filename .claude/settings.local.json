@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(python convert_md_to_myasp.py:*)",
+      "Bash(mkdir:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(git rm:*)",
+      "Bash(ls:*)",
+      "Bash(pip3 install:*)",
+      "Bash(npm install)",
+      "Bash(npm uninstall:*)",
+      "Bash(grep:*)",
+      "Bash(npm start)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(echo:*)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(pyenv versions:*)",
+      "Bash(pyenv rehash:*)",
+      "Bash(python3:*)"
+    ],
+    "deny": []
+  }
+}

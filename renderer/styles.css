@@ -1,0 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+/* Custom Scrollbar for Webkit */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #475569; /* slate-600 for dark mode */
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #64748b; /* slate-500 for dark mode */
+}
+
+/* Hide scrollbar for tabs but keep functionality */
+.tabs-root::-webkit-scrollbar {
+    display: none;
+}
+.tabs-root {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+    color-scheme: dark; /* Hint to browser including scrollbars */
+}
+
+/* 24文字チェック用のスタイル */
+.line-length-check.show-line-length .line-over-24 {
+    background-color: rgba(239, 68, 68, 0.2); /* Slightly more visible on dark */
+    border-bottom: 2px solid #ef4444;
+    text-decoration-thickness: 2px;
+}
+
+.line-length-check.show-line-length .line-24-chars::after {
+    content: '│';
+    position: absolute;
+    color: #94a3b8; /* slate-400 */
+    pointer-events: none;
+    margin-left: 0px;
+}
+
+.line-length-check {
+    position: relative;
+}
+
+/* Custom fade-in animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Glasscard utility if needed */
+.glass-card {
+    background: rgba(30, 41, 59, 0.7); /* slate-800-ish with opacity */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Preview area typography */
+#mdPreview h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    color: #e2e8f0; /* slate-200 */
+    border-bottom: 1px solid #334155; /* slate-700 */
+    padding-bottom: 0.5rem;
+}
+
+#mdPreview h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+    color: #cbd5e1; /* slate-300 */
+    padding-left: 0.75rem;
+    border-left: 4px solid #3b82f6;
+}
+
+#mdPreview h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: #94a3b8; /* slate-400 */
+}
+
+#mdPreview p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+    color: #e2e8f0; /* slate-200 */
+}
+
+#mdPreview ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    color: #e2e8f0;
+}
+
+#mdPreview ol {
+    list-style-type: decimal;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    color: #e2e8f0;
+}
+
+#mdPreview blockquote {
+    border-left: 4px solid #475569; /* slate-600 */
+    padding-left: 1rem;
+    color: #94a3b8; /* slate-400 */
+    font-style: italic;
+    margin-bottom: 1rem;
+}

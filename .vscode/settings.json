@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.md": "markdown"
+    },
+    "markdown.preview.doubleClickToSwitchToEditor": false,
+    "markdown.preview.markEditorSelection": true,
+    "markdown.preview.breaks": true,
+    "markdown.preview.linkify": true,
+    "liveServer.settings.port": 5501
+}
