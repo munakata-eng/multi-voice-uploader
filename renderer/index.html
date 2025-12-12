@@ -731,7 +731,7 @@
                         Whisperの音声処理に <span class="font-mono text-slate-300">ffmpeg</span> が必要です。
                     </p>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
                             <div class="text-xs font-bold text-slate-300">Windows</div>
                             <div class="relative">
@@ -754,18 +754,6 @@
                                 <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words pr-10">brew install ffmpeg</pre>
                             </div>
                         </div>
-                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                            <div class="text-xs font-bold text-slate-300">Linux</div>
-                            <div class="relative">
-                                <button type="button"
-                                    class="absolute top-2 right-2 p-1.5 bg-slate-900/70 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 rounded-lg transition-all"
-                                    onclick="onClickCopyCodeBlock(this)" title="コピー">
-                                    <i data-lucide="copy" class="w-4 h-4"></i>
-                                </button>
-                                <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words pr-10">sudo apt update
-sudo apt install -y ffmpeg</pre>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -777,7 +765,7 @@ sudo apt install -y ffmpeg</pre>
                     <p class="text-sm text-slate-400 leading-relaxed">
                         文字起こしは Python を使います。pip は通常 Python と一緒に入ります（入っていなければこの手順で解決することが多いです）。
                     </p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
                             <div class="text-xs font-bold text-slate-300">Windows</div>
                             <div class="relative">
@@ -788,7 +776,6 @@ sudo apt install -y ffmpeg</pre>
                                 </button>
                                 <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words pr-10">winget install Python.Python.3.12</pre>
                             </div>
-                            <p class="text-[11px] text-slate-500">※ 管理者権限が必要な場合があります</p>
                         </div>
                         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
                             <div class="text-xs font-bold text-slate-300">macOS</div>
@@ -799,18 +786,6 @@ sudo apt install -y ffmpeg</pre>
                                     <i data-lucide="copy" class="w-4 h-4"></i>
                                 </button>
                                 <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words pr-10">brew install python</pre>
-                            </div>
-                        </div>
-                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                            <div class="text-xs font-bold text-slate-300">Linux</div>
-                            <div class="relative">
-                                <button type="button"
-                                    class="absolute top-2 right-2 p-1.5 bg-slate-900/70 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 rounded-lg transition-all"
-                                    onclick="onClickCopyCodeBlock(this)" title="コピー">
-                                    <i data-lucide="copy" class="w-4 h-4"></i>
-                                </button>
-                                <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words pr-10">sudo apt update
-sudo apt install -y python3 python3-pip</pre>
                             </div>
                         </div>
                     </div>
@@ -825,14 +800,28 @@ sudo apt install -y python3 python3-pip</pre>
                     <p class="text-sm text-slate-400 leading-relaxed">
                         文字起こしは Python の Whisper を使います。以下でインストールできます（ネットワークが必要です）。
                     </p>
-                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                        <div class="relative">
-                            <button type="button"
-                                class="absolute top-2 right-2 p-1.5 bg-slate-900/70 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 rounded-lg transition-all"
-                                onclick="onClickCopyCodeBlock(this)" title="コピー">
-                                <i data-lucide="copy" class="w-4 h-4"></i>
-                            </button>
-                            <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words pr-10">python -m pip install -U openai-whisper</pre>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-300">Windows（Python Launcher）</div>
+                            <div class="relative">
+                                <button type="button"
+                                    class="absolute top-2 right-2 p-1.5 bg-slate-900/70 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 rounded-lg transition-all"
+                                    onclick="onClickCopyCodeBlock(this)" title="コピー">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                                <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words pr-10">py -m pip install -U openai-whisper</pre>
+                            </div>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-300">macOS</div>
+                            <div class="relative">
+                                <button type="button"
+                                    class="absolute top-2 right-2 p-1.5 bg-slate-900/70 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 rounded-lg transition-all"
+                                    onclick="onClickCopyCodeBlock(this)" title="コピー">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                                <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words pr-10">python -m pip install -U openai-whisper</pre>
+                            </div>
                         </div>
                     </div>
                     <p class="text-[11px] text-slate-500">
