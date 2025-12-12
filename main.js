@@ -1142,26 +1142,80 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
     console.log(`System PATH: ${systemPath}`);
 
     return new Promise((resolve) => {
+      // パスを絶対パスに変換して正規化（Windowsのパス問題を回避）
+      const normalizedAudioPath = path.resolve(audioFilePath).replace(/\\/g, path.sep);
+      const normalizedTextDir = path.resolve(textDir).replace(/\\/g, path.sep);
+      const normalizedScript = path.resolve(transcribeScript).replace(/\\/g, path.sep);
 
-      const pythonProcess = spawn(pythonCmd, [...pythonCmdPrefixArgs, transcribeScript, audioFilePath, '-o', textDir], {
-        cwd: app.isPackaged ? path.dirname(transcribeScript) : __dirname,
+      console.log(`Normalized audio path: ${normalizedAudioPath}`);
+      console.log(`Normalized text dir: ${normalizedTextDir}`);
+      console.log(`Normalized script: ${normalizedScript}`);
+
+      const pythonProcess = spawn(pythonCmd, [...pythonCmdPrefixArgs, normalizedScript, normalizedAudioPath, '-o', normalizedTextDir], {
+        cwd: app.isPackaged ? path.dirname(normalizedScript) : __dirname,
         env: {
           ...process.env,
-          PATH: enhancedPath
-        }
+          PATH: enhancedPath,
+          PYTHONIOENCODING: 'utf-8'  // Pythonの出力をUTF-8に強制
+        },
+        encoding: 'utf8'  // Node.js側でもUTF-8として処理
       });
 
       let stdout = '';
       let stderr = '';
 
       pythonProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-        console.log('Python stdout:', data.toString());
+        // UTF-8として正しくデコード（文字化けを防ぐ）
+        let decoded;
+        if (Buffer.isBuffer(data)) {
+          // まずUTF-8を試す
+          try {
+            decoded = data.toString('utf8');
+          } catch (e) {
+            // UTF-8でデコードできない場合は、CP932を試す（Windowsの場合）
+            if (process.platform === 'win32') {
+              try {
+                decoded = data.toString('shift_jis');
+              } catch (e2) {
+                // どちらも失敗した場合は、UTF-8で無理やりデコード（文字化けする可能性あり）
+                decoded = data.toString('utf8');
+              }
+            } else {
+              decoded = data.toString('utf8');
+            }
+          }
+        } else {
+          decoded = String(data);
+        }
+        stdout += decoded;
+        console.log('Python stdout:', decoded);
       });
 
       pythonProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        console.error('Python stderr:', data.toString());
+        // UTF-8として正しくデコード（文字化けを防ぐ）
+        let decoded;
+        if (Buffer.isBuffer(data)) {
+          // まずUTF-8を試す
+          try {
+            decoded = data.toString('utf8');
+          } catch (e) {
+            // UTF-8でデコードできない場合は、CP932を試す（Windowsの場合）
+            if (process.platform === 'win32') {
+              try {
+                decoded = data.toString('shift_jis');
+              } catch (e2) {
+                // どちらも失敗した場合は、UTF-8で無理やりデコード（文字化けする可能性あり）
+                decoded = data.toString('utf8');
+              }
+            } else {
+              decoded = data.toString('utf8');
+            }
+          }
+        } else {
+          decoded = String(data);
+        }
+        stderr += decoded;
+        console.error('Python stderr:', decoded);
       });
 
       pythonProcess.on('close', async (code) => {
@@ -1204,9 +1258,13 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
             } else {
               errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonCmdDisplay}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
             }
-          } else if (stderr.includes('No such file or directory') && stderr.includes('ffmpeg')) {
+          } else if ((stderr.includes('No such file or directory') && stderr.includes('ffmpeg')) || 
+                     (stderr.includes('WinError 2') && process.platform === 'win32') ||
+                     (stderr.includes('WinError') && stderr.includes('2') && process.platform === 'win32')) {
+            // WinError 2は「ファイルが見つかりません」エラーで、ffmpegが見つからない場合に発生
+            // 文字化けしていても、WinError 2が含まれていればffmpegの問題の可能性が高い
             if (process.platform === 'win32') {
-              errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下の手順でインストールしてください：\n\n1. https://ffmpeg.org/download.html からダウンロード\n2. または、chocolateyを使用している場合：\n\n   choco install ffmpeg\n\n3. インストール後、PATH環境変数にffmpegのパスを追加してください。`;
+              errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下の手順でインストールしてください：\n\n1. https://ffmpeg.org/download.html からダウンロード\n2. または、chocolateyを使用している場合：\n\n   choco install ffmpeg\n\n3. インストール後、PATH環境変数にffmpegのパスを追加してください。\n4. インストール後、アプリを再起動して再度お試しください。`;
             } else if (process.platform === 'darwin') {
               errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下のコマンドでインストールしてください：\n\nbrew install ffmpeg\n\nまたは、Homebrewがインストールされていない場合は：\n\nhttps://ffmpeg.org/download.html からダウンロードしてください`;
             } else {

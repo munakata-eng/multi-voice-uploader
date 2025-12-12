@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 ローカルWhisperを使用してオーディオファイルを文字起こしするスクリプト
 """
@@ -8,6 +9,15 @@ import sys
 import argparse
 from pathlib import Path
 import whisper
+
+# Windowsで標準出力のエンコーディングをUTF-8に設定
+if sys.platform == 'win32':
+    import io
+    # 標準出力と標準エラー出力をUTF-8に設定
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if sys.stderr.encoding != 'utf-8':
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
 def transcribe_audio_file(audio_file_path, output_dir=None, model_name="base"):
@@ -23,8 +33,17 @@ def transcribe_audio_file(audio_file_path, output_dir=None, model_name="base"):
         bool: 成功時True、失敗時False
     """
     try:
+        # パスを正規化
+        audio_file_path = os.path.normpath(os.path.abspath(audio_file_path))
+        
+        # 入力ファイルの存在確認（念のため再確認）
+        if not os.path.exists(audio_file_path):
+            print(f"エラー: 入力ファイルが見つかりません: {audio_file_path}", file=sys.stderr)
+            return False
+
         # 出力先でファイルの存在確認
         if output_dir:
+            output_dir = os.path.normpath(os.path.abspath(output_dir))
             audio_path = Path(audio_file_path)
             output_file = Path(output_dir) / f"{audio_path.stem}.txt"
 
@@ -71,13 +90,20 @@ def main():
 
     args = parser.parse_args()
 
+    # パスを正規化（Windowsのパス区切り文字の問題を回避）
+    input_file_path = os.path.normpath(os.path.abspath(args.input_file))
+    if args.output:
+        output_dir = os.path.normpath(os.path.abspath(args.output))
+    else:
+        output_dir = None
+
     # 入力ファイルの存在確認
-    if not os.path.exists(args.input_file):
-        print(f"エラー: 入力ファイルが見つかりません: {args.input_file}", file=sys.stderr)
+    if not os.path.exists(input_file_path):
+        print(f"エラー: 入力ファイルが見つかりません: {input_file_path}", file=sys.stderr)
         sys.exit(1)
 
     # 単一ファイル処理
-    success = transcribe_audio_file(args.input_file, args.output, args.model)
+    success = transcribe_audio_file(input_file_path, output_dir, args.model)
     sys.exit(0 if success else 1)
 
 
