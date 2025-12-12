@@ -1047,54 +1047,61 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
       };
     }
 
-    // Pythonのパスを取得（Macの場合）
-    let pythonPath = 'python3';
-    if (process.platform === 'darwin') {
+    // Pythonの起動コマンドを選択
+    // Windowsでは python より py (Python Launcher) のほうが確実なことが多い
+    let pythonCmd = 'python3'
+    let pythonCmdPrefixArgs = []
+
+    if (process.platform === 'win32') {
+      pythonCmd = 'py'
+      pythonCmdPrefixArgs = ['-3']
+    } else if (process.platform === 'darwin') {
       // Macの場合、一般的なPythonパスを試す
       const possiblePaths = [
         '/usr/bin/python3',
         '/usr/local/bin/python3',
         '/opt/homebrew/bin/python3',
         'python3'
-      ];
+      ]
 
       for (const possiblePath of possiblePaths) {
         try {
-          // パスの存在確認（spawnの前に確認）
           if (possiblePath === 'python3') {
-            pythonPath = 'python3';
-            break;
+            pythonCmd = 'python3'
+            break
           }
           if (await fs.pathExists(possiblePath)) {
-            pythonPath = possiblePath;
-            break;
+            pythonCmd = possiblePath
+            break
           }
         } catch (e) {
-          // パス確認エラーは無視して次を試す
+          // ignore
         }
       }
     }
 
-    console.log(`Using Python: ${pythonPath}`);
+    const pythonCmdDisplay = `${pythonCmd}${pythonCmdPrefixArgs.length > 0 ? ' ' + pythonCmdPrefixArgs.join(' ') : ''}`
+
+    console.log(`Using Python: ${pythonCmdDisplay}`);
     console.log(`Transcription script: ${transcribeScript}`);
     console.log(`Audio file: ${audioFilePath}`);
     console.log(`Output dir: ${textDir}`);
 
     // Pythonのバージョンとパスを確認（デバッグ用）
     try {
-      const { execSync } = require('child_process');
-      const pythonVersion = execSync(`"${pythonPath}" --version`, { encoding: 'utf8', timeout: 5000 });
-      console.log(`Python version: ${pythonVersion.trim()}`);
+      const { execFileSync } = require('child_process')
+      const pythonVersion = execFileSync(pythonCmd, [...pythonCmdPrefixArgs, '--version'], { encoding: 'utf8', timeout: 5000 })
+      console.log(`Python version: ${String(pythonVersion).trim()}`)
 
       // whisperがインストールされているか確認
       try {
-        execSync(`"${pythonPath}" -c "import whisper"`, { encoding: 'utf8', timeout: 5000 });
-        console.log('whisper module is available');
+        execFileSync(pythonCmd, [...pythonCmdPrefixArgs, '-c', 'import whisper'], { encoding: 'utf8', timeout: 5000 })
+        console.log('whisper module is available')
       } catch (e) {
-        console.warn('whisper module is NOT available in this Python environment');
+        console.warn('whisper module is NOT available in this Python environment')
       }
     } catch (e) {
-      console.log(`Could not get Python version: ${e.message}`);
+      console.log(`Could not get Python version: ${e.message}`)
     }
 
     // PATH環境変数を構築（ffmpegやpyenvのshimを見つけられるように）
@@ -1112,29 +1119,31 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
       priorityPaths.push(pyenvShims);
     }
 
-    // Homebrewのパスを追加（Apple Silicon優先）
-    if (await fs.pathExists('/opt/homebrew/bin').catch(() => false)) {
-      priorityPaths.push('/opt/homebrew/bin');
-    }
-    if (await fs.pathExists('/usr/local/bin').catch(() => false)) {
-      priorityPaths.push('/usr/local/bin');
-    }
+    if (process.platform !== 'win32') {
+      // Homebrewのパスを追加（Apple Silicon優先）
+      if (await fs.pathExists('/opt/homebrew/bin').catch(() => false)) {
+        priorityPaths.push('/opt/homebrew/bin')
+      }
+      if (await fs.pathExists('/usr/local/bin').catch(() => false)) {
+        priorityPaths.push('/usr/local/bin')
+      }
 
-    // システムパスを追加
-    priorityPaths.push('/usr/bin', '/bin');
+      // システムパスを追加
+      priorityPaths.push('/usr/bin', '/bin')
+    }
 
     // 既存のPATHから重複を除いて追加
-    const existingPaths = systemPath.split(':').filter(p => p && !priorityPaths.includes(p));
+    const existingPaths = systemPath.split(path.delimiter).filter(p => p && !priorityPaths.includes(p));
 
     // 最終的なPATHを構築
-    const enhancedPath = [...priorityPaths, ...existingPaths].join(':');
+    const enhancedPath = [...priorityPaths, ...existingPaths].join(path.delimiter);
 
     console.log(`Enhanced PATH: ${enhancedPath}`);
     console.log(`System PATH: ${systemPath}`);
 
     return new Promise((resolve) => {
 
-      const pythonProcess = spawn(pythonPath, [transcribeScript, audioFilePath, '-o', textDir], {
+      const pythonProcess = spawn(pythonCmd, [...pythonCmdPrefixArgs, transcribeScript, audioFilePath, '-o', textDir], {
         cwd: app.isPackaged ? path.dirname(transcribeScript) : __dirname,
         env: {
           ...process.env,
@@ -1187,13 +1196,13 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
 
           if (stderr.includes('ModuleNotFoundError') && stderr.includes('whisper')) {
             // 使用しているPythonパスを特定して、その環境にインストールするように案内
-            const pythonVersion = pythonPath === 'python3' ? 'python3' : pythonPath;
-            const pipCommand = pythonPath === 'python3' ? (process.platform === 'win32' ? 'pip' : 'pip3') : pythonPath.replace('python3', 'pip3').replace('python', 'pip');
+            const pythonVersion = pythonCmdDisplay
+            const pipCommand = process.platform === 'win32' ? 'py -m pip' : (pythonCmd.includes('python3') ? 'pip3' : 'pip')
 
             if (process.platform === 'win32') {
-              errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonPath}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
+              errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonCmdDisplay}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
             } else {
-              errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonPath}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
+              errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonCmdDisplay}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
             }
           } else if (stderr.includes('No such file or directory') && stderr.includes('ffmpeg')) {
             if (process.platform === 'win32') {
