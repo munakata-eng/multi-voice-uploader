@@ -69,7 +69,7 @@ function getCandidateUserDataDirs() {
   try {
     const appData = app.getPath('appData')
     if (appData) {
-      dirs.add(path.join(appData, 'voice-uploader-tool'))
+      dirs.add(path.join(appData, 'multi-voice-uploader'))
       dirs.add(path.join(appData, 'MultiVoiceUploader'))
       try {
         dirs.add(path.join(appData, app.getName()))
