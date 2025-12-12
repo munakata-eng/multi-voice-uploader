@@ -1181,24 +1181,57 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
           console.error(`stdout: ${stdout}`);
 
           // エラーメッセージを解析して、より分かりやすいメッセージを生成
+          // stderrとstdoutの両方を確認
+          const combinedError = (stderr + '\n' + stdout).toLowerCase();
           let errorMessage = `文字起こしに失敗しました`;
 
           if (stderr.includes('ModuleNotFoundError') && stderr.includes('whisper')) {
             // 使用しているPythonパスを特定して、その環境にインストールするように案内
             const pythonVersion = pythonPath === 'python3' ? 'python3' : pythonPath;
-            const pipCommand = pythonPath === 'python3' ? 'pip3' : pythonPath.replace('python3', 'pip3');
-            errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonPath}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。`;
+            const pipCommand = pythonPath === 'python3' ? (process.platform === 'win32' ? 'pip' : 'pip3') : pythonPath.replace('python3', 'pip3').replace('python', 'pip');
+            
+            if (process.platform === 'win32') {
+              errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonPath}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
+            } else {
+              errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonPath}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
+            }
           } else if (stderr.includes('No such file or directory') && stderr.includes('ffmpeg')) {
-            errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下のコマンドでインストールしてください：\n\nbrew install ffmpeg\n\nまたは、Homebrewがインストールされていない場合は：\n\nhttps://ffmpeg.org/download.html からダウンロードしてください`;
+            if (process.platform === 'win32') {
+              errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下の手順でインストールしてください：\n\n1. https://ffmpeg.org/download.html からダウンロード\n2. または、chocolateyを使用している場合：\n\n   choco install ffmpeg\n\n3. インストール後、PATH環境変数にffmpegのパスを追加してください。`;
+            } else if (process.platform === 'darwin') {
+              errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下のコマンドでインストールしてください：\n\nbrew install ffmpeg\n\nまたは、Homebrewがインストールされていない場合は：\n\nhttps://ffmpeg.org/download.html からダウンロードしてください`;
+            } else {
+              errorMessage = `ffmpegが見つかりません。\n\nwhisperは音声ファイルを処理するためにffmpegが必要です。\n\n以下のコマンドでインストールしてください：\n\nsudo apt-get install ffmpeg\n\nまたは\n\nsudo yum install ffmpeg\n\nまたは、https://ffmpeg.org/download.html からダウンロードしてください`;
+            }
           } else if (stderr.includes('ModuleNotFoundError')) {
             const moduleMatch = stderr.match(/No module named '([^']+)'/);
             if (moduleMatch) {
-              errorMessage = `${moduleMatch[1]}モジュールが見つかりません。\n\n以下のコマンドでインストールしてください：\n\npip3 install ${moduleMatch[1]}`;
+              const moduleName = moduleMatch[1];
+              const pipCommand = process.platform === 'win32' ? 'pip' : 'pip3';
+              errorMessage = `${moduleName}モジュールが見つかりません。\n\n以下のコマンドでインストールしてください：\n\n${pipCommand} install ${moduleName}\n\nまたは、requirements.txtがある場合は：\n\n${pipCommand} install -r requirements.txt`;
+            }
+          } else if (combinedError.includes('python') || stderr.includes('Python') || stderr.includes('python') || stdout.includes('Python') || stdout.includes('python')) {
+            // Python関連のエラー
+            if (combinedError.includes('command not found') || combinedError.includes('not found') || combinedError.includes('spawn') || combinedError.includes('enoent')) {
+              if (process.platform === 'win32') {
+                errorMessage = `Pythonが見つかりません。\n\n以下の手順でPythonをインストールしてください：\n\n1. https://www.python.org/downloads/ からPythonをダウンロード\n2. インストール時に「Add Python to PATH」にチェックを入れる\n3. インストール後、以下のコマンドで必要なモジュールをインストール：\n\n   pip install openai-whisper\n\n   または、requirements.txtがある場合は：\n\n   pip install -r requirements.txt`;
+              } else {
+                errorMessage = `Pythonが見つかりません。\n\n以下のコマンドでPythonをインストールしてください：\n\n${process.platform === 'darwin' ? 'brew install python3' : 'sudo apt-get install python3 python3-pip'}\n\nインストール後、以下のコマンドで必要なモジュールをインストール：\n\npip3 install openai-whisper\n\nまたは、requirements.txtがある場合は：\n\npip3 install -r requirements.txt`;
+              }
+            } else {
+              // Python関連のエラーだが、詳細が不明な場合
+              if (process.platform === 'win32') {
+                errorMessage = `文字起こしに失敗しました（Python関連のエラー）\n\nエラー詳細: ${stderr || stdout}\n\nPythonが正しくインストールされ、PATHに登録されているか確認してください。\n\n必要なモジュールをインストールするには：\n\n   pip install openai-whisper\n\n   または\n\n   pip install -r requirements.txt`;
+              } else {
+                errorMessage = `文字起こしに失敗しました（Python関連のエラー）\n\nエラー詳細: ${stderr || stdout}\n\nPythonが正しくインストールされ、PATHに登録されているか確認してください。\n\n必要なモジュールをインストールするには：\n\n   pip3 install openai-whisper\n\n   または\n\n   pip3 install -r requirements.txt`;
+              }
             }
           } else if (stderr) {
             errorMessage = `文字起こしに失敗しました: ${stderr}`;
+          } else if (stdout && stdout.includes('エラー') || stdout.includes('error')) {
+            errorMessage = `文字起こしに失敗しました: ${stdout}`;
           } else {
-            errorMessage = `文字起こしに失敗しました（終了コード: ${code}）`;
+            errorMessage = `文字起こしに失敗しました（終了コード: ${code}）\n\nPythonと必要なモジュールがインストールされているか確認してください。\n\nエラー詳細:\n${stderr || stdout || '詳細情報なし'}`;
           }
 
           resolve({
@@ -1213,9 +1246,45 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
 
       pythonProcess.on('error', (error) => {
         console.error('Failed to start python process:', error);
+        
+        let errorMessage = `Pythonの実行に失敗しました。\n\n`;
+        
+        // Pythonが見つからない場合
+        if (error.message.includes('spawn') && error.message.includes('ENOENT')) {
+          if (process.platform === 'win32') {
+            errorMessage += `Pythonがインストールされていないか、PATHに登録されていません。\n\n`;
+            errorMessage += `以下の手順でPythonをインストールしてください：\n\n`;
+            errorMessage += `1. https://www.python.org/downloads/ からPythonをダウンロード\n`;
+            errorMessage += `2. インストール時に「Add Python to PATH」にチェックを入れる\n`;
+            errorMessage += `3. インストール後、以下のコマンドで必要なモジュールをインストール：\n\n`;
+            errorMessage += `   pip install openai-whisper\n\n`;
+            errorMessage += `または、requirements.txtがある場合は：\n\n`;
+            errorMessage += `   pip install -r requirements.txt\n`;
+          } else if (process.platform === 'darwin') {
+            errorMessage += `Pythonがインストールされていないか、PATHに登録されていません。\n\n`;
+            errorMessage += `以下のコマンドでPythonをインストールしてください：\n\n`;
+            errorMessage += `brew install python3\n\n`;
+            errorMessage += `インストール後、以下のコマンドで必要なモジュールをインストール：\n\n`;
+            errorMessage += `pip3 install openai-whisper\n\n`;
+            errorMessage += `または、requirements.txtがある場合は：\n\n`;
+            errorMessage += `pip3 install -r requirements.txt\n`;
+          } else {
+            errorMessage += `Pythonがインストールされていないか、PATHに登録されていません。\n\n`;
+            errorMessage += `以下のコマンドでPythonをインストールしてください：\n\n`;
+            errorMessage += `sudo apt-get install python3 python3-pip\n\n`;
+            errorMessage += `インストール後、以下のコマンドで必要なモジュールをインストール：\n\n`;
+            errorMessage += `pip3 install openai-whisper\n\n`;
+            errorMessage += `または、requirements.txtがある場合は：\n\n`;
+            errorMessage += `pip3 install -r requirements.txt\n`;
+          }
+        } else {
+          errorMessage += `エラー詳細: ${error.message}\n\n`;
+          errorMessage += `PythonのインストールとPATHの設定を確認してください。`;
+        }
+        
         resolve({
           success: false,
-          message: `Failed to start transcription process: ${error.message}`,
+          message: errorMessage,
           error: error.message
         });
       });
@@ -1223,9 +1292,45 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
 
   } catch (error) {
     console.error('Error in transcribe-audio handler:', error);
+    
+    let errorMessage = `文字起こしに失敗しました。\n\n`;
+    
+    // エラーメッセージに「Python」が含まれている場合
+    if (error.message.includes('Python') || error.message.includes('python')) {
+      if (process.platform === 'win32') {
+        errorMessage += `Pythonがインストールされていないか、PATHに登録されていません。\n\n`;
+        errorMessage += `以下の手順でPythonをインストールしてください：\n\n`;
+        errorMessage += `1. https://www.python.org/downloads/ からPythonをダウンロード\n`;
+        errorMessage += `2. インストール時に「Add Python to PATH」にチェックを入れる\n`;
+        errorMessage += `3. インストール後、以下のコマンドで必要なモジュールをインストール：\n\n`;
+        errorMessage += `   pip install openai-whisper\n\n`;
+        errorMessage += `または、requirements.txtがある場合は：\n\n`;
+        errorMessage += `   pip install -r requirements.txt\n`;
+      } else if (process.platform === 'darwin') {
+        errorMessage += `Pythonがインストールされていないか、PATHに登録されていません。\n\n`;
+        errorMessage += `以下のコマンドでPythonをインストールしてください：\n\n`;
+        errorMessage += `brew install python3\n\n`;
+        errorMessage += `インストール後、以下のコマンドで必要なモジュールをインストール：\n\n`;
+        errorMessage += `pip3 install openai-whisper\n\n`;
+        errorMessage += `または、requirements.txtがある場合は：\n\n`;
+        errorMessage += `pip3 install -r requirements.txt\n`;
+      } else {
+        errorMessage += `Pythonがインストールされていないか、PATHに登録されていません。\n\n`;
+        errorMessage += `以下のコマンドでPythonをインストールしてください：\n\n`;
+        errorMessage += `sudo apt-get install python3 python3-pip\n\n`;
+        errorMessage += `インストール後、以下のコマンドで必要なモジュールをインストール：\n\n`;
+        errorMessage += `pip3 install openai-whisper\n\n`;
+        errorMessage += `または、requirements.txtがある場合は：\n\n`;
+        errorMessage += `pip3 install -r requirements.txt\n`;
+      }
+    } else {
+      errorMessage += `エラー詳細: ${error.message}\n\n`;
+      errorMessage += `Pythonと必要なモジュールがインストールされているか確認してください。`;
+    }
+    
     return {
       success: false,
-      message: `Error: ${error.message}`,
+      message: errorMessage,
       error: error.message
     };
   }
