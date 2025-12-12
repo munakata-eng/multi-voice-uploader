@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const os = require('os');
 
 // 起動直後に main.js が実行されているかを切り分けるためのデバッグ（必要時のみ有効）
@@ -1108,8 +1108,25 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
     const homeDir = os.homedir();
     const pyenvShims = path.join(homeDir, '.pyenv', 'shims');
 
-    // システムのPATHを取得
-    const systemPath = process.env.PATH || '';
+    // システムのPATHを取得（Windowsではより確実に取得）
+    let systemPath = process.env.PATH || '';
+    
+    // Windowsの場合、システムのPATH環境変数をより確実に取得
+    if (process.platform === 'win32') {
+      try {
+        // PowerShellまたはcmdからPATHを取得（より確実）
+        const cmdPath = execSync('powershell -Command "[Environment]::GetEnvironmentVariable(\'Path\', \'Machine\') + \';\' + [Environment]::GetEnvironmentVariable(\'Path\', \'User\')"', {
+          encoding: 'utf8',
+          timeout: 5000
+        }).trim();
+        if (cmdPath) {
+          systemPath = cmdPath;
+        }
+      } catch (e) {
+        // フォールバック: 既存のprocess.env.PATHを使用
+        console.warn('Failed to get system PATH, using process.env.PATH:', e.message);
+      }
+    }
 
     // 必要なパスを優先的に追加（存在確認付き）
     const priorityPaths = [];
@@ -1119,7 +1136,31 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
       priorityPaths.push(pyenvShims);
     }
 
-    if (process.platform !== 'win32') {
+    if (process.platform === 'win32') {
+      // Windowsの一般的なffmpegインストール場所をチェック
+      const commonFfmpegPaths = [
+        'C:\\ffmpeg\\bin',
+        'C:\\Program Files\\ffmpeg\\bin',
+        'C:\\Program Files (x86)\\ffmpeg\\bin',
+        path.join(homeDir, 'AppData', 'Local', 'ffmpeg', 'bin'),
+        'C:\\ProgramData\\chocolatey\\bin', // Chocolatey
+        'C:\\tools\\ffmpeg\\bin',
+        path.join(homeDir, 'ffmpeg', 'bin')
+      ];
+      
+      for (const ffmpegPath of commonFfmpegPaths) {
+        if (await fs.pathExists(ffmpegPath).catch(() => false)) {
+          priorityPaths.push(ffmpegPath);
+        }
+      }
+      
+      // Windowsのシステムパスも追加
+      priorityPaths.push(
+        'C:\\Windows\\System32',
+        'C:\\Windows',
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0'
+      );
+    } else {
       // Homebrewのパスを追加（Apple Silicon優先）
       if (await fs.pathExists('/opt/homebrew/bin').catch(() => false)) {
         priorityPaths.push('/opt/homebrew/bin')
