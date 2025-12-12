@@ -695,6 +695,115 @@
             </div>
         </div>
     </div>
+
+    <!-- 文字起こしセットアップヘルプモーダル -->
+    <div id="transcribeHelpModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"
+        aria-hidden="true">
+        <!-- Overlay -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+            onclick="onClickCloseTranscribeHelpModal()"></div>
+
+        <!-- Modal Content -->
+        <div
+            class="relative bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden ring-1 ring-white/10 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50 shrink-0">
+                <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <span class="p-1.5 bg-amber-500/15 text-amber-400 rounded-lg">
+                        <i data-lucide="circle-help" class="w-5 h-5"></i>
+                    </span>
+                    文字起こしのセットアップ（ffmpeg / pip / Whisper）
+                </h2>
+                <button
+                    class="p-1.5 text-slate-400 hover:text-slate-300 hover:bg-slate-800 rounded-full transition-colors"
+                    onclick="onClickCloseTranscribeHelpModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1 space-y-6">
+                <div class="space-y-2">
+                    <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="film" class="w-4 h-4 text-slate-400"></i>
+                        1) ffmpeg をインストール
+                    </h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        Whisperの音声処理に <span class="font-mono text-slate-300">ffmpeg</span> が必要です。インストール後は
+                        <span class="font-mono text-slate-300">ffmpeg -version</span> が実行できることを確認してください。
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-300">Windows</div>
+                            <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words">winget install Gyan.FFmpeg</pre>
+                            <p class="text-[11px] text-slate-500">※ wingetが無い場合は Chocolatey などでもOK</p>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-300">macOS</div>
+                            <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words">brew install ffmpeg</pre>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-300">Linux</div>
+                            <pre class="text-xs text-slate-200 font-mono bg-slate-950 rounded-lg whitespace-pre-wrap break-words">sudo apt update
+sudo apt install -y ffmpeg</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
+                        2) pip を使える状態にする
+                    </h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        基本は Python を入れれば pip も同梱されています。まずは以下で確認してください。
+                    </p>
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words">python --version
+python -m pip --version</pre>
+                    </div>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        pip が無い/壊れている場合は、次で復旧できます。
+                    </p>
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words">python -m ensurepip --upgrade
+python -m pip install --upgrade pip</pre>
+                    </div>
+                    <p class="text-[11px] text-slate-500">Windows で python が通らない場合は <span class="font-mono">py -m pip --version</span> も試してください</p>
+                </div>
+
+                <div class="space-y-2">
+                    <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="audio-lines" class="w-4 h-4 text-slate-400"></i>
+                        3) Whisper（openai-whisper）をインストール
+                    </h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        文字起こしは Python の Whisper を使います。以下でインストールできます（ネットワークが必要です）。
+                    </p>
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words">python -m pip install -U openai-whisper</pre>
+                    </div>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        インストール後は以下で動作確認できます。
+                    </p>
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <pre class="text-xs text-slate-200 font-mono whitespace-pre-wrap break-words">whisper --help</pre>
+                    </div>
+                    <p class="text-[11px] text-slate-500">
+                        ※ Whisper は内部で PyTorch を使うため、環境によっては初回インストールに時間がかかります
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 p-6 border-t border-slate-800 bg-slate-900/50 shrink-0">
+                <button type="button"
+                    class="px-5 py-2.5 bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 rounded-xl text-sm font-semibold transition-colors shadow-sm active:bg-slate-800"
+                    onclick="onClickCloseTranscribeHelpModal()">
+                    閉じる
+                </button>
+            </div>
+        </div>
+    </div>
     <script src="renderer.js"></script>
     <script>
         // Lucideアイコンを初期化

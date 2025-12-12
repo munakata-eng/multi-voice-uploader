@@ -347,10 +347,15 @@ function createFileItem(file) {
                 <i data-lucide="download" class="w-3.5 h-3.5"></i>
             </button>
         </div>` :
-        `<button class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-amber-500/10 hover:shadow-amber-500/20 flex items-center gap-1.5 group transform hover:-translate-y-0.5 active:translate-y-0" onclick="transcribeAudio('${file.filename}')" title="文字起こし実行">
-            <i data-lucide="mic" class="w-3.5 h-3.5 group-hover:animate-pulse"></i>
-            文字起こし実行
-        </button>`;
+        `<div class="flex items-center gap-2">
+            <button class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-amber-500/10 hover:shadow-amber-500/20 flex items-center gap-1.5 group transform hover:-translate-y-0.5 active:translate-y-0" onclick="transcribeAudio('${file.filename}')" title="文字起こし実行">
+                <i data-lucide="mic" class="w-3.5 h-3.5 group-hover:animate-pulse"></i>
+                文字起こし実行
+            </button>
+            <button class="p-2 bg-slate-900 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 rounded-lg transition-all shadow-sm hover:shadow-md" onclick="onClickOpenTranscribeHelpModal()" title="文字起こしのセットアップ方法">
+                <i data-lucide="circle-help" class="w-4 h-4"></i>
+            </button>
+        </div>`;
 
 
 
@@ -965,6 +970,33 @@ window.closeVoicyPublishModal = function () {
         currentVoicyTargetFile = null;
     }
 }
+
+// 文字起こしセットアップヘルプモーダル
+window.onClickOpenTranscribeHelpModal = function () {
+    const modal = document.getElementById('transcribeHelpModal')
+    if (!modal) return
+
+    modal.classList.remove('opacity-0', 'pointer-events-none')
+    modal.setAttribute('aria-hidden', 'false')
+}
+
+window.onClickCloseTranscribeHelpModal = function () {
+    const modal = document.getElementById('transcribeHelpModal')
+    if (!modal) return
+
+    modal.classList.add('opacity-0', 'pointer-events-none')
+    modal.setAttribute('aria-hidden', 'true')
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+
+    const modal = document.getElementById('transcribeHelpModal')
+    if (!modal) return
+    if (modal.classList.contains('pointer-events-none')) return
+
+    window.onClickCloseTranscribeHelpModal()
+})
 
 // Stand.fm投稿モーダル関連の変数
 let currentStandfmTargetFile = null;
