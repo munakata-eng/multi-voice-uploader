@@ -11,6 +11,7 @@ const addFileBtn = document.getElementById('addFileBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const openStandfmBtn = document.getElementById('openStandfmBtn');
 const openVoicyBtn = document.getElementById('openVoicyBtn');
+const openSpotifyBtn = document.getElementById('openSpotifyBtn')
 const filterNoText = document.getElementById('filterNoText');
 const filterUnpublished = document.getElementById('filterUnpublished');
 const yearMonthTabs = document.getElementById('yearMonthTabs');
@@ -52,6 +53,12 @@ function setupEventListeners() {
         openVoicyBtn.addEventListener('click', () => openExternalUrl('https://va-cms.admin.voicy.jp/'));
     } else {
         console.error('openVoicyBtn要素が見つかりません');
+    }
+
+    if (openSpotifyBtn) {
+        openSpotifyBtn.addEventListener('click', () => openExternalUrl('https://podcasters.spotify.com/'))
+    } else {
+        console.error('openSpotifyBtn要素が見つかりません')
     }
 
     if (filterNoText) {

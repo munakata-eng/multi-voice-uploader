@@ -34,6 +34,7 @@
     },
     "files": [
       "main.js",
+      "main/**/*",
       "renderer/**/*",
       "package.json",
       "icon.png",
