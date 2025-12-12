@@ -988,6 +988,36 @@ window.onClickCloseTranscribeHelpModal = function () {
     modal.setAttribute('aria-hidden', 'true')
 }
 
+window.onClickCopyCodeBlock = async function (buttonElement) {
+    try {
+        const container = buttonElement && buttonElement.parentElement ? buttonElement.parentElement : null
+        const pre = container ? container.querySelector('pre') : null
+        const text = pre ? pre.textContent.trim() : ''
+
+        if (!text) {
+            showToast('コピーするコマンドが見つかりません', 'error')
+            return
+        }
+
+        try {
+            await navigator.clipboard.writeText(text)
+            showToast('コマンドをコピーしました')
+            return
+        } catch (e) {
+            const textArea = document.createElement('textarea')
+            textArea.value = text
+            document.body.appendChild(textArea)
+            textArea.select()
+            document.execCommand('copy')
+            document.body.removeChild(textArea)
+            showToast('コマンドをコピーしました')
+        }
+    } catch (error) {
+        console.error('コマンドコピーエラー:', error)
+        showToast('コピーに失敗しました', 'error')
+    }
+}
+
 document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return
 

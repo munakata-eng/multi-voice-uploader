@@ -1189,7 +1189,7 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
             // 使用しているPythonパスを特定して、その環境にインストールするように案内
             const pythonVersion = pythonPath === 'python3' ? 'python3' : pythonPath;
             const pipCommand = pythonPath === 'python3' ? (process.platform === 'win32' ? 'pip' : 'pip3') : pythonPath.replace('python3', 'pip3').replace('python', 'pip');
-            
+
             if (process.platform === 'win32') {
               errorMessage = `whisperモジュールが見つかりません。\n\nアプリが使用しているPython: ${pythonPath}\n\n以下のコマンドで、このPython環境にインストールしてください：\n\n${pipCommand} install openai-whisper\n\nまたは\n\n${pythonVersion} -m pip install openai-whisper\n\n注意: 複数のPython環境がある場合、アプリが使用しているPython環境にインストールする必要があります。\n\nrequirements.txtがある場合は、以下のコマンドでもインストールできます：\n\n${pipCommand} install -r requirements.txt`;
             } else {
@@ -1246,9 +1246,9 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
 
       pythonProcess.on('error', (error) => {
         console.error('Failed to start python process:', error);
-        
+
         let errorMessage = `Pythonの実行に失敗しました。\n\n`;
-        
+
         // Pythonが見つからない場合
         if (error.message.includes('spawn') && error.message.includes('ENOENT')) {
           if (process.platform === 'win32') {
@@ -1281,7 +1281,7 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
           errorMessage += `エラー詳細: ${error.message}\n\n`;
           errorMessage += `PythonのインストールとPATHの設定を確認してください。`;
         }
-        
+
         resolve({
           success: false,
           message: errorMessage,
@@ -1292,9 +1292,9 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
 
   } catch (error) {
     console.error('Error in transcribe-audio handler:', error);
-    
+
     let errorMessage = `文字起こしに失敗しました。\n\n`;
-    
+
     // エラーメッセージに「Python」が含まれている場合
     if (error.message.includes('Python') || error.message.includes('python')) {
       if (process.platform === 'win32') {
@@ -1327,7 +1327,7 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
       errorMessage += `エラー詳細: ${error.message}\n\n`;
       errorMessage += `Pythonと必要なモジュールがインストールされているか確認してください。`;
     }
-    
+
     return {
       success: false,
       message: errorMessage,
