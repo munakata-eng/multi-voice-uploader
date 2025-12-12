@@ -757,7 +757,7 @@ function publishToVoicy(basename) {
         if (savedTitle) {
             document.getElementById('voicyChapterTitle').value = savedTitle;
         } else {
-            document.getElementById('voicyChapterTitle').value = '創理公式サイトはこちら';
+            document.getElementById('voicyChapterTitle').value = '';
         }
 
         // 放送の説明
@@ -773,7 +773,7 @@ function publishToVoicy(basename) {
         if (savedUrl !== null) {
             document.getElementById('voicyChapterUrl').value = savedUrl;
         } else {
-            document.getElementById('voicyChapterUrl').value = 'https://vibe-coding.munakata-engineer.com/';
+            document.getElementById('voicyChapterUrl').value = '';
         }
 
         // 予約投稿時間
@@ -812,7 +812,7 @@ function publishToVoicy(basename) {
         if (savedHashtags) {
             document.getElementById('voicyHashtags').value = savedHashtags;
         } else {
-            document.getElementById('voicyHashtags').value = 'AIプログラミング VibeCoding むなかた総理 プログラミング';
+            document.getElementById('voicyHashtags').value = '';
         }
 
         // --- イベントリスナーの設定 ---
@@ -1064,7 +1064,7 @@ window.publishToStandfm = async function publishToStandfm(basename, initialDate)
             const savedDescription = await ipcRenderer.invoke('get-config', 'standfmDefaultDescription');
             const descriptionInput = document.getElementById('standfmDescription');
             if (descriptionInput) {
-                const defaultDesc = '創理公式サイトはこちら\nhttps://vibe-coding.munakata-engineer.com/';
+                const defaultDesc = '';
                 descriptionInput.value = savedDescription !== null && savedDescription !== undefined ? savedDescription : defaultDesc;
             }
 

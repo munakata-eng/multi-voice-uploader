@@ -1465,8 +1465,7 @@
   "20251215_gmail_update": {
     "title": "Gmailの更新について",
     "publishDate": "2025-12-15",
-    "standfmPublished": true,
-    "voicyPublished": false,
-    "standfmPublishedDate": "2025-12-12T06:33:09.353Z"
+    "standfmPublished": false,
+    "voicyPublished": false
   }
 }

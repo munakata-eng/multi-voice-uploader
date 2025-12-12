@@ -588,9 +588,9 @@ ipcMain.handle('publish-to-voicy', async (event, basename, broadcastTitle, chapt
   try {
     console.log(`Starting Voicy publish process for: ${basename}`);
 
-    const finalChapterTitle = chapterTitle || '創理公式サイトはこちら';
+    const finalChapterTitle = chapterTitle || '';
     const finalChapterUrl = chapterUrl; // 空の場合はスキップするためデフォルト値を設定しない
-    const timeToPublish = publishTime || '06:10';
+    const timeToPublish = publishTime || '06:00';
     const [publishHour, publishMinute] = timeToPublish.split(':');
 
     // 日付の処理
@@ -2030,7 +2030,7 @@ ipcMain.handle('publish-to-standfm', async (event, basename, description, bgm, p
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // 放送の説明を入力
-    const finalDescription = description || '創理公式サイトはこちら\nhttps://vibe-coding.munakata-engineer.com/';
+    const finalDescription = description || '';
     console.log('Setting broadcast description...');
 
     try {

@@ -3,9 +3,9 @@ function autoFillVoicy() {
   console.log('Starting Voicy auto-fill process...');
 
   // Configuration
-  const CHAPTER_TITLE = '創理公式サイトはこちら';
-  const URL = 'https://vibe-coding.munakata-engineer.com/';
-  const HASHTAGS = ['AIプログラミング', 'VibeCoding', 'むなかた総理', 'プログラミング'];
+  const CHAPTER_TITLE = '';
+  const URL = '';
+  const HASHTAGS = [];
 
   // Step 1: Fill chapter title
   function fillChapterTitle() {
