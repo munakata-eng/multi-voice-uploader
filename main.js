@@ -588,7 +588,7 @@ ipcMain.handle('publish-to-voicy', async (event, basename, broadcastTitle, chapt
   try {
     console.log(`Starting Voicy publish process for: ${basename}`);
 
-    const finalChapterTitle = chapterTitle || '';
+    const finalChapterTitle = typeof chapterTitle === 'string' ? chapterTitle.trim() : ''
     const finalChapterUrl = chapterUrl; // 空の場合はスキップするためデフォルト値を設定しない
     const timeToPublish = publishTime || '06:00';
     const [publishHour, publishMinute] = timeToPublish.split(':');
@@ -718,19 +718,24 @@ ipcMain.handle('publish-to-voicy', async (event, basename, broadcastTitle, chapt
     // チャプター名の入力欄を探す
     await page.waitForSelector('input[formcontrolname="title"]', { timeout: 30000 });
 
-    // 既存のチャプター内容をクリア（もしあれば）
-    await page.evaluate(() => {
-      const chapterInput = document.querySelector('input[formcontrolname="title"]');
-      if (chapterInput) {
-        chapterInput.value = '';
-        chapterInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    });
+    // チャプタータイトルが空の場合は、デフォルト値（例: チャプター1）を維持するため入力を変更しない
+    if (finalChapterTitle) {
+      // 既存のチャプター内容をクリア
+      await page.evaluate(() => {
+        const chapterInput = document.querySelector('input[formcontrolname="title"]')
+        if (chapterInput) {
+          chapterInput.value = ''
+          chapterInput.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+      })
 
-    // 新しいチャプター内容を入力
-    await page.type('input[formcontrolname="title"]', finalChapterTitle);
+      // 新しいチャプター内容を入力
+      await page.type('input[formcontrolname="title"]', finalChapterTitle)
 
-    console.log(`Chapter content updated successfully: ${finalChapterTitle}`);
+      console.log(`Chapter content updated successfully: ${finalChapterTitle}`)
+    } else {
+      console.log('Chapter title is empty. Keeping existing chapter title value')
+    }
 
     // URL追加ボタンをクリック（URLがある場合のみ）
     if (finalChapterUrl) {
