@@ -56,7 +56,7 @@ function setupEventListeners() {
     }
 
     if (openSpotifyBtn) {
-        openSpotifyBtn.addEventListener('click', () => openExternalUrl('https://podcasters.spotify.com/'))
+        openSpotifyBtn.addEventListener('click', () => openExternalUrl('https://creators.spotify.com/pod/login'))
     } else {
         console.error('openSpotifyBtn要素が見つかりません')
     }
@@ -139,6 +139,7 @@ async function loadAudioFiles() {
                 // 投稿ステータスはget-audio-filesから取得した最新の値を使用
                 standfmPublished: file.standfmPublished,
                 voicyPublished: file.voicyPublished,
+                spotifyPublished: file.spotifyPublished,
                 // その他のメタデータ（title, publishDateなど）はローカルのmetadataから取得
                 title: localMeta.title || file.title || '',
                 publishDate: localMeta.publishDate || file.publishDate || ''
@@ -285,7 +286,7 @@ function renderFileList() {
 
     if (filterUnpublished.checked) {
         filteredFiles = filteredFiles.filter(file =>
-            !file.standfmPublished || !file.voicyPublished
+            !file.standfmPublished || !file.voicyPublished || !file.spotifyPublished
         );
     }
 
@@ -388,6 +389,17 @@ function createFileItem(file) {
             Voicy投稿
         </button>`;
 
+    const spotifyButton = file.spotifyPublished ?
+        `<button class="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/10 text-emerald-500 hover:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm border border-emerald-500/20 hover:border-red-500/20 transition-all cursor-pointer group" onclick="resetPublishStatus('${file.basename}', 'spotify')" title="Spotify投稿済みをリセット">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 group-hover:hidden"></i>
+            <i data-lucide="x-circle" class="w-3.5 h-3.5 hidden group-hover:block"></i>
+            Spotify済
+        </button>` :
+        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToSpotify('${file.basename}')" title="Spotifyに投稿">
+            <i data-lucide="music" class="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-500 transition-colors"></i>
+            Spotify投稿
+        </button>`
+
 
 
     return `
@@ -424,6 +436,7 @@ function createFileItem(file) {
                 <div class="h-6 w-px bg-slate-800"></div>
                 ${standfmButton}
                 ${voicyButton}
+                ${spotifyButton}
             </div>
         </div>
     `;
@@ -688,6 +701,7 @@ function editFile(basename) {
         document.getElementById('editDate').value = file.publishDate || '';
         document.getElementById('editStandfm').checked = file.standfmPublished || false;
         document.getElementById('editVoicy').checked = file.voicyPublished || false;
+        document.getElementById('editSpotify').checked = file.spotifyPublished || false
 
         editModal.classList.remove('opacity-0', 'pointer-events-none');
     }
@@ -709,7 +723,8 @@ async function saveFileMetadata() {
             title: formData.get('title'),
             publishDate: formData.get('publishDate'),
             standfmPublished: formData.has('standfmPublished'),
-            voicyPublished: formData.has('voicyPublished')
+            voicyPublished: formData.has('voicyPublished'),
+            spotifyPublished: formData.has('spotifyPublished')
         };
 
         metadata[currentEditingFile] = fileMetadata;
@@ -906,6 +921,23 @@ function publishToVoicy(basename) {
 
     } else {
         console.error('Voicy投稿モーダルが見つかりません');
+    }
+}
+
+async function publishToSpotify(basename) {
+    try {
+        showToast('Spotifyのエピソード作成ページへ移動中...')
+        const result = await ipcRenderer.invoke('publish-to-spotify', basename)
+        if (result && result.success) {
+            showToast('Spotifyのエピソード作成ページへ移動しました')
+            return
+        }
+
+        const message = result && result.message ? result.message : 'Spotifyへの移動に失敗しました'
+        showToast(message, 'error')
+    } catch (error) {
+        console.error('Spotify投稿エラー:', error)
+        showToast('Spotifyページを開けませんでした', 'error')
     }
 }
 
@@ -1488,7 +1520,8 @@ async function openExternalUrl(url) {
 async function resetPublishStatus(basename, platform) {
     const platformNames = {
         'voicy': 'Voicy',
-        'standfm': 'stand.fm'
+        'standfm': 'stand.fm',
+        'spotify': 'Spotify'
     };
     const platformName = platformNames[platform] || platform;
 
@@ -1520,3 +1553,4 @@ window.transcribeAudio = transcribeAudio;
 window.copyTranscriptionPrompt = copyTranscriptionPrompt;
 window.downloadTranscription = downloadTranscription;
 window.publishToVoicy = publishToVoicy;
+window.publishToSpotify = publishToSpotify
