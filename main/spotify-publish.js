@@ -538,8 +538,91 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
               await imageInput.uploadFile(normalizedImagePath)
               console.log('[Spotify] 画像ファイルのアップロードが完了しました')
 
-              // アップロードが完了するまで少し待機
-              await new Promise(resolve => setTimeout(resolve, 2000))
+              // 画像編集モーダルが表示されるまで待機
+              console.log('[Spotify] 画像編集モーダルの表示を待機中...')
+              try {
+                // モーダルが表示されるまで待つ
+                await page.waitForSelector('[data-encore-id="dialogConfirmation"]', { timeout: 10000 })
+                console.log('[Spotify] 画像編集モーダルが表示されました')
+
+                // 少し待ってから「保存」ボタンを探す
+                await new Promise(resolve => setTimeout(resolve, 1000))
+
+                // 「保存」ボタンを探してクリック
+                const saveButtonSelectors = [
+                  'button[data-encore-id="buttonPrimary"]',
+                  'footer button[data-encore-id="buttonPrimary"]'
+                ]
+
+                let saveButtonClicked = false
+                for (const selector of saveButtonSelectors) {
+                  try {
+                    console.log(`[Spotify] 保存ボタンを探しています: "${selector}"`)
+                    const saveButton = await page.$(selector)
+                    if (saveButton) {
+                      // ボタンのテキストを確認
+                      const buttonText = await page.evaluate(el => el.textContent.trim(), saveButton)
+                      console.log(`[Spotify] ボタンが見つかりました。テキスト: "${buttonText}"`)
+
+                      if (buttonText.includes('保存')) {
+                        await saveButton.click()
+                        console.log('[Spotify] 保存ボタンをクリックしました')
+                        saveButtonClicked = true
+                        break
+                      }
+                    }
+                  } catch (e) {
+                    console.log(`[Spotify] 保存ボタンが見つかりませんでした: "${selector}"`)
+                  }
+                }
+
+                // フォールバック1: XPathで「保存」ボタンを探す
+                if (!saveButtonClicked) {
+                  console.log('[Spotify] フォールバック1: XPathで「保存」ボタンを探しています...')
+                  try {
+                    const saveButtons = await page.$x('//button[contains(text(), "保存")]')
+                    if (saveButtons.length > 0) {
+                      await saveButtons[0].click()
+                      console.log('[Spotify] 保存ボタンをクリックしました（XPath）')
+                      saveButtonClicked = true
+                    }
+                  } catch (e) {
+                    console.log('[Spotify] XPathで保存ボタンが見つかりませんでした')
+                  }
+                }
+
+                // フォールバック2: evaluateで「保存」ボタンを探す
+                if (!saveButtonClicked) {
+                  console.log('[Spotify] フォールバック2: evaluateで「保存」ボタンを探しています...')
+                  const saveButton = await page.evaluateHandle(() => {
+                    const buttons = Array.from(document.querySelectorAll('button'))
+                    const saveBtn = buttons.find(btn => {
+                      const text = btn.textContent.trim()
+                      return text === '保存' || text.includes('保存')
+                    })
+                    return saveBtn
+                  })
+
+                  if (saveButton && saveButton.asElement) {
+                    const element = saveButton.asElement()
+                    if (element) {
+                      await element.click()
+                      console.log('[Spotify] 保存ボタンをクリックしました（evaluate）')
+                      saveButtonClicked = true
+                    }
+                  }
+                }
+
+                if (saveButtonClicked) {
+                  // モーダルが閉じるまで少し待機
+                  await new Promise(resolve => setTimeout(resolve, 2000))
+                  console.log('[Spotify] 画像編集モーダルの処理が完了しました')
+                } else {
+                  console.log('[Spotify] 保存ボタンが見つかりませんでした')
+                }
+              } catch (modalError) {
+                console.log('[Spotify] 画像編集モーダルが表示されませんでした（スキップ）:', modalError.message)
+              }
             } else {
               console.log('[Spotify] 画像アップロード用のinput要素が見つかりませんでした。画像のアップロードをスキップします')
             }

@@ -384,7 +384,7 @@ function createFileItem(file) {
             <i data-lucide="x-circle" class="w-3.5 h-3.5 hidden group-hover:block"></i>
             Voicy済
         </button>` :
-        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-500/30 hover:bg-purple-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToVoicy('${file.basename}')" title="Voicyに投稿">
+        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-500/30 hover:bg-purple-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToVoicy('${file.basename}', '${file.publishDate || ''}')" title="Voicyに投稿">
             <i data-lucide="mic" class="w-3.5 h-3.5 text-slate-500 group-hover:text-purple-500 transition-colors"></i>
             Voicy投稿
         </button>`;
@@ -395,7 +395,7 @@ function createFileItem(file) {
             <i data-lucide="x-circle" class="w-3.5 h-3.5 hidden group-hover:block"></i>
             Spotify済
         </button>` :
-        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToSpotify('${file.basename}')" title="Spotifyに投稿">
+        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToSpotify('${file.basename}', '${file.publishDate || ''}')" title="Spotifyに投稿">
             <i data-lucide="music" class="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-500 transition-colors"></i>
             Spotify投稿
         </button>`
@@ -751,7 +751,8 @@ let currentVoicyTargetFile = null;
 
 // Voicy投稿ボタンクリック時の処理（モーダルを開く）
 // Voicy投稿ボタンクリック時の処理（モーダルを開く）
-function publishToVoicy(basename) {
+function publishToVoicy(basename, initialDate) {
+    console.log('Voicy投稿関数が呼び出されました:', basename, 'InitialDate:', initialDate)
     currentVoicyTargetFile = basename;
 
     // UIを更新
@@ -811,24 +812,45 @@ function publishToVoicy(basename) {
             document.getElementById('voicyPublishTime').value = '06:10';
         }
 
-        // 予約投稿日 (ファイル名から自動設定、または明日)
+        // 予約投稿日
+        // 優先順位:
+        // 1. 引数で渡された日時 (initialDate) - カードに表示されている日時
+        // 2. ファイル名から解析された日時
+        // 3. 明日
         const dateInput = document.getElementById('voicyPublishDate');
         if (dateInput) {
             let dateStr = '';
-            // ファイル名から解析
-            const dateMatch = basename.match(/^(\d{4})(\d{2})(\d{2})/);
-            if (dateMatch) {
-                const year = dateMatch[1];
-                const month = dateMatch[2];
-                const day = dateMatch[3];
-                dateStr = `${year}-${month}-${day}`;
-            } else {
-                // なければ明日
-                const d = new Date();
-                d.setDate(d.getDate() + 1);
+
+            if (initialDate && !isNaN(new Date(initialDate).getTime())) {
+                // initialDateが有効な場合
+                const d = new Date(initialDate);
                 const year = d.getFullYear();
                 const month = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
+                dateStr = `${year}-${month}-${day}`;
+            } else {
+                // フォールバック: ファイル名または明日
+                let targetDate = new Date();
+                targetDate.setDate(targetDate.getDate() + 1);
+
+                try {
+                    const dateMatch = basename.match(/^(\d{4})(\d{2})(\d{2})/);
+                    if (dateMatch) {
+                        const year = parseInt(dateMatch[1]);
+                        const month = parseInt(dateMatch[2]) - 1;
+                        const day = parseInt(dateMatch[3]);
+                        const fileDate = new Date(year, month, day);
+                        if (!isNaN(fileDate.getTime())) {
+                            targetDate = fileDate;
+                        }
+                    }
+                } catch (e) {
+                    console.error('日付解析エラー:', e);
+                }
+
+                const year = targetDate.getFullYear();
+                const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+                const day = String(targetDate.getDate()).padStart(2, '0');
                 dateStr = `${year}-${month}-${day}`;
             }
             dateInput.value = dateStr;
@@ -1141,42 +1163,80 @@ window.publishToSpotify = async function publishToSpotify(basename, initialDate)
             // 保存された画像パスを設定
             updateImageUI(savedImage || null)
 
-            // 画像選択ボタンのイベントリスナー
+            // 画像選択ボタンと画像入力の処理
             if (selectImageBtn && imageInput) {
-                const newSelectImageBtn = selectImageBtn.cloneNode(true)
-                selectImageBtn.parentNode.replaceChild(newSelectImageBtn, selectImageBtn)
-
-                newSelectImageBtn.addEventListener('click', () => {
-                    imageInput.click()
-                })
-            }
-
-            // 画像入力のイベントリスナー
-            if (imageInput) {
+                // Inputを再生成（リスナー除去のため）
                 const newImageInput = imageInput.cloneNode(true)
                 imageInput.parentNode.replaceChild(newImageInput, imageInput)
 
+                // Buttonを再生成（リスナー除去のため）
+                const newSelectImageBtn = selectImageBtn.cloneNode(true)
+                selectImageBtn.parentNode.replaceChild(newSelectImageBtn, selectImageBtn)
+
+                // ボタンが新しいInputをクリックするように設定
+                newSelectImageBtn.addEventListener('click', async () => {
+                    console.log('Select image button clicked')
+                    try {
+                        const selectedPath = await ipcRenderer.invoke('select-image-file')
+                        console.log('Image selected via dialog:', selectedPath)
+
+                        if (!selectedPath) return
+
+                        const result = await ipcRenderer.invoke('save-broadcast-image', selectedPath)
+
+                        if (result.success) {
+                            console.log('Image saved internally:', result.path)
+                            ipcRenderer.invoke('set-config', 'spotifyDefaultImage', result.path)
+                            updateImageUI(result.path)
+                        } else {
+                            console.error('Failed to save image internally:', result.error)
+                            alert('画像の保存に失敗しました: ' + result.error)
+                        }
+                    } catch (err) {
+                        console.error('Error selecting/saving image:', err)
+                        alert('画像の保存中にエラーが発生しました')
+                    }
+                })
+
+                // 新しいInputにchangeイベントを設定
                 newImageInput.addEventListener('change', async (e) => {
-                    const file = e.target.files[0]
-                    if (file) {
-                        const filePath = file.path
-                        await ipcRenderer.invoke('set-config', 'spotifyDefaultImage', filePath)
-                        updateImageUI(filePath)
+                    console.log('Image input changed', e.target.files)
+                    if (e.target.files && e.target.files.length > 0) {
+                        const file = e.target.files[0]
+                        const originalPath = file.path || file.webkitRelativePath || null
+
+                        console.log('Image selected:', originalPath)
+
+                        try {
+                            // メインプロセス経由でアプリ内部領域に保存
+                            const result = await ipcRenderer.invoke('save-broadcast-image', originalPath)
+
+                            if (result.success) {
+                                console.log('Image saved internally:', result.path)
+                                ipcRenderer.invoke('set-config', 'spotifyDefaultImage', result.path)
+                                updateImageUI(result.path)
+                            } else {
+                                console.error('Failed to save image internally:', result.error)
+                                alert('画像の保存に失敗しました: ' + result.error)
+                            }
+                        } catch (err) {
+                            console.error('IPC error during image save:', err)
+                            alert('画像の保存中にエラーが発生しました')
+                        }
                     }
                 })
             }
 
-            // 画像クリアボタンのイベントリスナー
+            // 画像クリアボタンの処理
             if (clearImageBtn) {
                 const newClearImageBtn = clearImageBtn.cloneNode(true)
                 clearImageBtn.parentNode.replaceChild(newClearImageBtn, clearImageBtn)
-
-                newClearImageBtn.addEventListener('click', async () => {
-                    await ipcRenderer.invoke('set-config', 'spotifyDefaultImage', '')
+                newClearImageBtn.addEventListener('click', () => {
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultImage', null)
                     updateImageUI(null)
-                    if (imageInput) {
-                        imageInput.value = ''
-                    }
+                    // 画像入力もリセット（再取得してリセット）
+                    const currentInput = document.getElementById('spotifyImageInput')
+                    if (currentInput) currentInput.value = ''
                 })
             }
 
