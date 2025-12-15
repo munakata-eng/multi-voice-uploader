@@ -26,7 +26,7 @@ async function waitForUrlToContain(page, substr, timeoutMs) {
   return finalUrl
 }
 
-function registerSpotifyPublishHandler({ ipcMain, getPageInstance }) {
+function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, getAppPaths }) {
   ipcMain.handle('publish-to-spotify', async (event, basename) => {
     try {
       console.log('[Spotify] 処理開始')
@@ -167,10 +167,110 @@ function registerSpotifyPublishHandler({ ipcMain, getPageInstance }) {
       const wizardFinalUrl = await waitForUrlToContain(page, '/episode/wizard', 10000)
       console.log('[Spotify] /episode/wizardへの遷移完了。最終URL:', wizardFinalUrl)
 
+      // 7) 音声ファイルのアップロード
+      console.log('[Spotify] ステップ7: 音声ファイルのアップロードを開始...')
+
+      const { audioDir } = getAppPaths()
+
+      // 対応する音声ファイルのパスを構築
+      let audioFilePath = path.join(audioDir, basename + '.mp4')
+
+      // ファイルが存在するかチェック
+      if (!(await fs.pathExists(audioFilePath))) {
+        // .mp4が存在しない場合は.m4aを試す
+        const m4aFilePath = path.join(audioDir, basename + '.m4a')
+        if (await fs.pathExists(m4aFilePath)) {
+          audioFilePath = m4aFilePath
+          console.log('[Spotify] .mp4が見つからないため、.m4aを使用します')
+        } else {
+          // .mp3も試す
+          const mp3FilePath = path.join(audioDir, basename + '.mp3')
+          if (await fs.pathExists(mp3FilePath)) {
+            audioFilePath = mp3FilePath
+            console.log('[Spotify] .mp4/.m4aが見つからないため、.mp3を使用します')
+          } else {
+            throw new Error(`音声ファイルが見つかりません: ${basename}.mp4, ${basename}.m4a, ${basename}.mp3`)
+          }
+        }
+      }
+
+      console.log(`[Spotify] アップロードする音声ファイル: ${audioFilePath}`)
+
+      // アップロードエリアを探す（汎用的なセレクターを使用）
+      console.log('[Spotify] アップロードエリアを探しています...')
+
+      // 複数のセレクターを試す
+      const uploadSelectors = [
+        'input[type="file"][accept*="mp3"]',
+        'input[type="file"][accept*="m4a"]',
+        'input[type="file"][accept*="audio"]',
+        'input[type="file"][id*="upload"]',
+        '#uploadAreaInput',
+        'input[type="file"]'
+      ]
+
+      let fileInput = null
+      for (const selector of uploadSelectors) {
+        try {
+          console.log(`[Spotify] セレクターを試行中: "${selector}"`)
+          await page.waitForSelector(selector, { timeout: 5000 })
+          fileInput = await page.$(selector)
+          if (fileInput) {
+            // accept属性を確認して、音声ファイル形式が含まれているかチェック
+            const acceptAttr = await page.evaluate(el => el.getAttribute('accept'), fileInput)
+            console.log(`[Spotify] セレクターが見つかりました: "${selector}", accept="${acceptAttr}"`)
+
+            // accept属性に音声ファイル形式が含まれているか確認
+            if (acceptAttr && (
+              acceptAttr.includes('mp3') ||
+              acceptAttr.includes('m4a') ||
+              acceptAttr.includes('audio') ||
+              acceptAttr.includes('wav') ||
+              acceptAttr.includes('mp4')
+            )) {
+              console.log(`[Spotify] 音声ファイル用のinput要素を特定しました`)
+              break
+            } else if (!acceptAttr) {
+              // accept属性がない場合は、汎用的なinput[type="file"]として使用
+              console.log(`[Spotify] accept属性がないため、汎用的なinputとして使用します`)
+              break
+            }
+          }
+        } catch (e) {
+          console.log(`[Spotify] セレクターが見つかりませんでした: "${selector}"`)
+        }
+      }
+
+      if (!fileInput) {
+        // フォールバック: data-testid="uploadAreaWrapper" の中を探す
+        console.log('[Spotify] フォールバック: data-testid="uploadAreaWrapper" を探しています...')
+        try {
+          await page.waitForSelector('[data-testid="uploadAreaWrapper"]', { timeout: 5000 })
+          fileInput = await page.$('[data-testid="uploadAreaWrapper"] input[type="file"]')
+          if (fileInput) {
+            console.log('[Spotify] data-testid="uploadAreaWrapper" 内のinput要素を見つけました')
+          }
+        } catch (e) {
+          console.log('[Spotify] data-testid="uploadAreaWrapper" が見つかりませんでした')
+        }
+      }
+
+      if (!fileInput) {
+        throw new Error('音声ファイルアップロード用のinput要素が見つかりませんでした')
+      }
+
+      // ファイルをアップロード
+      console.log(`[Spotify] 音声ファイルをアップロード中: ${audioFilePath}`)
+      await fileInput.uploadFile(audioFilePath)
+      console.log('[Spotify] 音声ファイルのアップロードが完了しました')
+
+      // アップロードが完了するまで少し待機
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
       console.log('[Spotify] 処理完了')
       return {
         success: true,
-        message: 'Spotifyのエピソード作成ページへ移動しました',
+        message: 'Spotifyのエピソード作成ページへ移動し、音声ファイルをアップロードしました',
         browser: true,
         wizardUrl
       }

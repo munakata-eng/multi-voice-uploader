@@ -1348,5 +1348,8 @@ registerStandfmPublishHandler({
 
 registerSpotifyPublishHandler({
   ipcMain,
-  getPageInstance
+  fs,
+  path,
+  getPageInstance,
+  getAppPaths
 })
