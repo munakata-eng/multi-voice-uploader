@@ -48,7 +48,10 @@
       "icon": "icon.png",
       "extendInfo": {
         "CFBundleDisplayName": "音声登録できるくん"
-      }
+      },
+      "identity": "MEL Tech LLC (PUSB9TBLVC)",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": true
     },
     "win": {
       "target": [
