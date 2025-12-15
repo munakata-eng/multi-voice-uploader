@@ -1232,6 +1232,90 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
         console.log('[Spotify] スケジュールセクションの処理でエラーが発生しました（スキップ）:', scheduleError.message)
       }
 
+      // 14) 「スケジュール」ボタンを押す
+      console.log('[Spotify] ステップ14: 「スケジュール」ボタンを探しています...')
+      try {
+        // 少し待機してからボタンを探す
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
+        // 複数のセレクターを試す
+        const scheduleButtonSelectors = [
+          'button[type="submit"][form="review-form"][data-encore-id="buttonPrimary"]',
+          'button[form="review-form"][data-encore-id="buttonPrimary"]',
+          'button[data-encore-id="buttonPrimary"]'
+        ]
+
+        let scheduleButtonClicked = false
+        for (const selector of scheduleButtonSelectors) {
+          try {
+            console.log(`[Spotify] 「スケジュール」ボタンを探しています: "${selector}"`)
+            await page.waitForSelector(selector, { timeout: 5000 })
+            const scheduleButton = await page.$(selector)
+            if (scheduleButton) {
+              // ボタンのテキストを確認
+              const buttonText = await page.evaluate(el => el.textContent.trim(), scheduleButton)
+              console.log(`[Spotify] ボタンが見つかりました。テキスト: "${buttonText}"`)
+
+              if (buttonText.includes('スケジュール')) {
+                await scheduleButton.click()
+                console.log('[Spotify] 「スケジュール」ボタンをクリックしました')
+                scheduleButtonClicked = true
+                break
+              }
+            }
+          } catch (e) {
+            console.log(`[Spotify] 「スケジュール」ボタンが見つかりませんでした: "${selector}"`)
+          }
+        }
+
+        // フォールバック1: XPathで「スケジュール」ボタンを探す
+        if (!scheduleButtonClicked) {
+          console.log('[Spotify] フォールバック1: XPathで「スケジュール」ボタンを探しています...')
+          try {
+            const scheduleButtons = await page.$x('//button[contains(text(), "スケジュール")]')
+            if (scheduleButtons.length > 0) {
+              await scheduleButtons[0].click()
+              console.log('[Spotify] 「スケジュール」ボタンをクリックしました（XPath）')
+              scheduleButtonClicked = true
+            }
+          } catch (e) {
+            console.log('[Spotify] XPathで「スケジュール」ボタンが見つかりませんでした')
+          }
+        }
+
+        // フォールバック2: evaluateで「スケジュール」ボタンを探す
+        if (!scheduleButtonClicked) {
+          console.log('[Spotify] フォールバック2: evaluateで「スケジュール」ボタンを探しています...')
+          const scheduleButton = await page.evaluateHandle(() => {
+            const buttons = Array.from(document.querySelectorAll('button[type="submit"]'))
+            const scheduleBtn = buttons.find(btn => {
+              const text = btn.textContent.trim()
+              return text === 'スケジュール' || text.includes('スケジュール')
+            })
+            return scheduleBtn
+          })
+
+          if (scheduleButton && scheduleButton.asElement) {
+            const element = scheduleButton.asElement()
+            if (element) {
+              await element.click()
+              console.log('[Spotify] 「スケジュール」ボタンをクリックしました（evaluate）')
+              scheduleButtonClicked = true
+            }
+          }
+        }
+
+        if (scheduleButtonClicked) {
+          // 「スケジュール」ボタンクリック後の遷移を待機
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          console.log('[Spotify] 「スケジュール」ボタンのクリックが完了しました')
+        } else {
+          console.log('[Spotify] 「スケジュール」ボタンが見つかりませんでした')
+        }
+      } catch (scheduleButtonError) {
+        console.log('[Spotify] 「スケジュール」ボタンのクリックでエラーが発生しました（スキップ）:', scheduleButtonError.message)
+      }
+
       console.log('[Spotify] 処理完了')
       return {
         success: true,
