@@ -1819,7 +1819,9 @@ async function executeSpotifyPublish() {
             currentSpotifyTargetFile,
             broadcastTitle,
             description,
-            imagePath
+            imagePath,
+            publishDate,
+            publishTime
         )
         console.log('Spotify投稿結果:', result)
 

@@ -27,7 +27,7 @@ async function waitForUrlToContain(page, substr, timeoutMs) {
 }
 
 function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, getAppPaths }) {
-  ipcMain.handle('publish-to-spotify', async (event, basename, broadcastTitle, description, imagePath) => {
+  ipcMain.handle('publish-to-spotify', async (event, basename, broadcastTitle, description, imagePath, publishDate, publishTime) => {
     try {
       console.log('[Spotify] 処理開始')
       const page = await getPageInstance()
@@ -353,9 +353,10 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
 
       await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // 9) 説明文の設定
+      // 9) 説明文の設定（必須項目）
       console.log('[Spotify] ステップ9: 説明文の設定を開始...')
-      const finalDescription = description || ''
+      // 説明文が指定されていない場合は、タイトルを使用
+      const finalDescription = description || title || ''
 
       if (finalDescription) {
         try {
@@ -388,26 +389,82 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
           }
 
           if (descriptionElement) {
-            // contenteditableのdivの場合
-            await descriptionElement.click()
-            await descriptionElement.focus()
+            // contenteditableのdivの場合、evaluateで直接DOMを操作
+            console.log(`[Spotify] 説明文を設定します: "${finalDescription}"`)
 
-            // 既存の内容をクリア
-            await page.evaluate((el) => {
+            await page.evaluate((el, text) => {
+              // 既存の内容をクリア
               el.textContent = ''
               el.innerHTML = ''
-              // Slateエディタの場合は、空の段落を設定
+
+              // Slateエディタの場合は、適切な構造でテキストを設定
               if (el.hasAttribute('data-slate-editor')) {
-                el.innerHTML = '<p><br></p>'
+                // Slateエディタの構造に合わせて設定
+                el.innerHTML = `<p>${text}</p>`
+
+                // Slateエディタの内部状態を更新するためにイベントを発火
+                const inputEvent = new Event('input', { bubbles: true, cancelable: true })
+                el.dispatchEvent(inputEvent)
+
+                // Slateの変更イベントを発火
+                const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                el.dispatchEvent(changeEvent)
+              } else {
+                // 通常のcontenteditableの場合
+                el.textContent = text
+                el.innerHTML = text
+
+                const inputEvent = new Event('input', { bubbles: true, cancelable: true })
+                el.dispatchEvent(inputEvent)
+
+                const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                el.dispatchEvent(changeEvent)
               }
+
+              // フォーカスを当てて、値が設定されたことを確認
+              el.focus()
+
+              // 少し待ってからblur
+              setTimeout(() => {
+                el.blur()
+              }, 100)
+            }, descriptionElement, finalDescription)
+
+            // 少し待機
+            await new Promise(resolve => setTimeout(resolve, 500))
+
+            // 値が正しく設定されたか確認
+            const actualValue = await page.evaluate((el) => {
+              return el.textContent.trim() || el.innerText.trim()
             }, descriptionElement)
 
-            // 少し待ってから入力
-            await new Promise(resolve => setTimeout(resolve, 300))
+            console.log(`[Spotify] 説明文を設定しました。実際の値: "${actualValue}"`)
 
-            // 説明文を入力（typeで入力）
-            await descriptionElement.type(finalDescription)
-            console.log(`[Spotify] 説明文を設定しました`)
+            if (!actualValue || actualValue.length === 0) {
+              console.log('[Spotify] 説明文が設定されていないため、別の方法を試します...')
+
+              // 別の方法: クリックしてからキーボードで入力
+              await descriptionElement.click()
+              await descriptionElement.focus()
+              await new Promise(resolve => setTimeout(resolve, 300))
+
+              // 全選択してから入力
+              await page.keyboard.down('Control')
+              await page.keyboard.press('KeyA')
+              await page.keyboard.up('Control')
+              await new Promise(resolve => setTimeout(resolve, 100))
+
+              // テキストを入力
+              await page.keyboard.type(finalDescription)
+              await new Promise(resolve => setTimeout(resolve, 300))
+
+              // 再度確認
+              const retryValue = await page.evaluate((el) => {
+                return el.textContent.trim() || el.innerText.trim()
+              }, descriptionElement)
+
+              console.log(`[Spotify] 再試行後の説明文: "${retryValue}"`)
+            }
           } else {
             console.log('[Spotify] 説明文入力欄が見つかりませんでした')
           }
@@ -415,7 +472,7 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
           console.error('[Spotify] 説明文設定でエラーが発生しました:', descError.message)
         }
       } else {
-        console.log('[Spotify] 説明文が指定されていないため、スキップします')
+        console.log('[Spotify] 説明文が指定されておらず、タイトルもないため、スキップします')
       }
 
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -617,6 +674,202 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
                   // モーダルが閉じるまで少し待機
                   await new Promise(resolve => setTimeout(resolve, 2000))
                   console.log('[Spotify] 画像編集モーダルの処理が完了しました')
+
+                  // 「次へ」ボタンを探してクリック
+                  console.log('[Spotify] 「次へ」ボタンを探しています...')
+                  try {
+                    // 複数のセレクターを試す
+                    const nextButtonSelectors = [
+                      'button[type="submit"][form="details-form"]',
+                      'button[form="details-form"][data-encore-id="buttonPrimary"]',
+                      'button[data-encore-id="buttonPrimary"]'
+                    ]
+
+                    let nextButtonClicked = false
+                    for (const selector of nextButtonSelectors) {
+                      try {
+                        console.log(`[Spotify] 「次へ」ボタンを探しています: "${selector}"`)
+                        await page.waitForSelector(selector, { timeout: 5000 })
+                        const nextButton = await page.$(selector)
+                        if (nextButton) {
+                          // ボタンのテキストを確認
+                          const buttonText = await page.evaluate(el => el.textContent.trim(), nextButton)
+                          console.log(`[Spotify] ボタンが見つかりました。テキスト: "${buttonText}"`)
+
+                          if (buttonText.includes('次へ')) {
+                            await nextButton.click()
+                            console.log('[Spotify] 「次へ」ボタンをクリックしました')
+                            nextButtonClicked = true
+                            break
+                          }
+                        }
+                      } catch (e) {
+                        console.log(`[Spotify] 「次へ」ボタンが見つかりませんでした: "${selector}"`)
+                      }
+                    }
+
+                    // フォールバック1: XPathで「次へ」ボタンを探す
+                    if (!nextButtonClicked) {
+                      console.log('[Spotify] フォールバック1: XPathで「次へ」ボタンを探しています...')
+                      try {
+                        const nextButtons = await page.$x('//button[contains(text(), "次へ")]')
+                        if (nextButtons.length > 0) {
+                          await nextButtons[0].click()
+                          console.log('[Spotify] 「次へ」ボタンをクリックしました（XPath）')
+                          nextButtonClicked = true
+                        }
+                      } catch (e) {
+                        console.log('[Spotify] XPathで「次へ」ボタンが見つかりませんでした')
+                      }
+                    }
+
+                    // フォールバック2: evaluateで「次へ」ボタンを探す
+                    if (!nextButtonClicked) {
+                      console.log('[Spotify] フォールバック2: evaluateで「次へ」ボタンを探しています...')
+                      const nextButton = await page.evaluateHandle(() => {
+                        const buttons = Array.from(document.querySelectorAll('button'))
+                        const nextBtn = buttons.find(btn => {
+                          const text = btn.textContent.trim()
+                          return text === '次へ' || text.includes('次へ')
+                        })
+                        return nextBtn
+                      })
+
+                      if (nextButton && nextButton.asElement) {
+                        const element = nextButton.asElement()
+                        if (element) {
+                          await element.click()
+                          console.log('[Spotify] 「次へ」ボタンをクリックしました（evaluate）')
+                          nextButtonClicked = true
+                        }
+                      }
+                    }
+
+                    if (nextButtonClicked) {
+                      // 「次へ」ボタンクリック後の遷移を待機
+                      await new Promise(resolve => setTimeout(resolve, 2000))
+                      console.log('[Spotify] 「次へ」ボタンのクリックが完了しました')
+
+                      // スケジュールセクションが表示されるまで待機
+                      console.log('[Spotify] スケジュールセクションの表示を待機中...')
+                      try {
+                        // スケジュールセクションが表示されるまで待つ
+                        await page.waitForSelector('#schedule-accordion', { timeout: 10000 })
+                        console.log('[Spotify] スケジュールセクションが表示されました')
+
+                        // 少し待ってから「スケジュール」ラジオボタンを選択
+                        await new Promise(resolve => setTimeout(resolve, 1000))
+
+                        // 「スケジュール」ラジオボタンを選択
+                        console.log('[Spotify] 「スケジュール」ラジオボタンを選択中...')
+                        const scheduleRadio = await page.$('#publish-date-schedule')
+                        if (scheduleRadio) {
+                          await scheduleRadio.click()
+                          console.log('[Spotify] 「スケジュール」ラジオボタンを選択しました')
+
+                          // 日時入力UIが表示されるまで待機
+                          await new Promise(resolve => setTimeout(resolve, 1000))
+
+                          // 投稿日時と時間を設定（publishDateとpublishTimeが指定されている場合）
+                          if (publishDate && publishTime) {
+                            console.log(`[Spotify] 投稿日時を設定します: ${publishDate} ${publishTime}`)
+
+                            // 日付を設定（YYYY-MM-DD形式をYYYY/MM/DD形式に変換）
+                            const dateParts = publishDate.split('-')
+                            if (dateParts.length === 3) {
+                              const formattedDate = `${dateParts[0]}/${dateParts[1]}/${dateParts[2]}`
+                              console.log(`[Spotify] 日付を設定: ${formattedDate}`)
+
+                              // 日付ボタンを探す（ラベルに「日付」が含まれるボタン）
+                              const dateButton = await page.evaluateHandle(() => {
+                                const buttons = Array.from(document.querySelectorAll('button[type="button"]'))
+                                for (const btn of buttons) {
+                                  const parent = btn.closest('div')
+                                  if (parent) {
+                                    const labelEl = parent.querySelector('label')
+                                    if (labelEl && labelEl.textContent.trim().includes('日付')) {
+                                      return btn
+                                    }
+                                  }
+                                }
+                                return null
+                              })
+
+                              if (dateButton && dateButton.asElement) {
+                                const element = dateButton.asElement()
+                                if (element) {
+                                  await element.click()
+                                  console.log('[Spotify] 日付ボタンをクリックしました')
+
+                                  // 日付ピッカーが表示されるまで待機
+                                  await new Promise(resolve => setTimeout(resolve, 1000))
+
+                                  // 日付を設定（カレンダーから選択する必要があるかもしれないが、まずは直接設定を試す）
+                                  // 日付ピッカーの実装によって異なるため、evaluateで直接設定を試す
+                                  await page.evaluate((dateStr) => {
+                                    // 日付入力欄を探して設定
+                                    const inputs = Array.from(document.querySelectorAll('input[type="text"]'))
+                                    for (const input of inputs) {
+                                      if (input.value && input.value.match(/\d{4}\/\d{2}\/\d{2}/)) {
+                                        input.value = dateStr
+                                        input.dispatchEvent(new Event('input', { bubbles: true }))
+                                        input.dispatchEvent(new Event('change', { bubbles: true }))
+                                        break
+                                      }
+                                    }
+                                  }, formattedDate)
+                                }
+                              } else {
+                                console.log('[Spotify] 日付ボタンが見つかりませんでした')
+                              }
+                            }
+
+                            // 時間を設定（HH:MM形式から時と分を抽出）
+                            const timeParts = publishTime.split(':')
+                            if (timeParts.length === 2) {
+                              const hour = timeParts[0].padStart(2, '0')
+                              const minute = timeParts[1].padStart(2, '0')
+                              console.log(`[Spotify] 時間を設定: ${hour}:${minute}`)
+
+                              // 時間入力欄を探して設定
+                              const hourInput = await page.$('input[data-testid="hour-picker"]')
+                              const minuteInput = await page.$('input[data-testid="minute-picker"]')
+
+                              if (hourInput && minuteInput) {
+                                await hourInput.click()
+                                await page.evaluate((el, val) => {
+                                  el.value = val
+                                  el.dispatchEvent(new Event('input', { bubbles: true }))
+                                  el.dispatchEvent(new Event('change', { bubbles: true }))
+                                }, hourInput, hour)
+
+                                await minuteInput.click()
+                                await page.evaluate((el, val) => {
+                                  el.value = val
+                                  el.dispatchEvent(new Event('input', { bubbles: true }))
+                                  el.dispatchEvent(new Event('change', { bubbles: true }))
+                                }, minuteInput, minute)
+
+                                console.log('[Spotify] 時間を設定しました')
+                              } else {
+                                console.log('[Spotify] 時間入力欄が見つかりませんでした')
+                              }
+                            }
+                          } else {
+                            console.log('[Spotify] 投稿日時が指定されていないため、スケジュール設定をスキップします')
+                          }
+                        } else {
+                          console.log('[Spotify] 「スケジュール」ラジオボタンが見つかりませんでした')
+                        }
+                      } catch (scheduleError) {
+                        console.log('[Spotify] スケジュールセクションの処理でエラーが発生しました（スキップ）:', scheduleError.message)
+                      }
+                    } else {
+                      console.log('[Spotify] 「次へ」ボタンが見つかりませんでした')
+                    }
+                  } catch (nextButtonError) {
+                    console.log('[Spotify] 「次へ」ボタンのクリックでエラーが発生しました（スキップ）:', nextButtonError.message)
+                  }
                 } else {
                   console.log('[Spotify] 保存ボタンが見つかりませんでした')
                 }
