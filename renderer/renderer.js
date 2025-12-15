@@ -875,17 +875,6 @@ function publishToVoicy(basename, initialDate) {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', () => executeVoicyPublish());
 
-        // 放送タイトルのデフォルト保存ボタン
-        const saveBroadcastTitleBtn = document.getElementById('saveVoicyBroadcastTitleDefaultBtn');
-        const newSaveBroadcastTitleBtn = saveBroadcastTitleBtn.cloneNode(true);
-        saveBroadcastTitleBtn.parentNode.replaceChild(newSaveBroadcastTitleBtn, saveBroadcastTitleBtn);
-
-        newSaveBroadcastTitleBtn.addEventListener('click', () => {
-            const broadcastTitle = document.getElementById('voicyBroadcastTitle').value;
-            localStorage.setItem('voicy_default_broadcast_title', broadcastTitle);
-            showToast('放送タイトルをデフォルトとして保存しました');
-        });
-
         // チャプタータイトルのデフォルト保存ボタン
         const saveTitleBtn = document.getElementById('saveVoicyTitleDefaultBtn');
         const newSaveTitleBtn = saveTitleBtn.cloneNode(true);
@@ -1035,28 +1024,6 @@ window.publishToSpotify = async function publishToSpotify(basename, initialDate)
 
                     setTimeout(() => {
                         newSaveTimeBtn.innerHTML = originalHtml
-                        lucide.createIcons()
-                    }, 2000)
-                })
-            }
-
-            // タイトル保存ボタンのイベントリスナー
-            const saveTitleBtn = document.getElementById('saveSpotifyTitleDefaultBtn')
-            if (saveTitleBtn) {
-                const newSaveTitleBtn = saveTitleBtn.cloneNode(true)
-                saveTitleBtn.parentNode.replaceChild(newSaveTitleBtn, saveTitleBtn)
-
-                newSaveTitleBtn.addEventListener('click', () => {
-                    const currentTitle = document.getElementById('spotifyBroadcastTitle').value
-                    ipcRenderer.invoke('set-config', 'spotifyDefaultTitle', currentTitle)
-
-                    // ボタンの見た目を更新
-                    const originalHtml = newSaveTitleBtn.innerHTML
-                    newSaveTitleBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>保存しました'
-                    lucide.createIcons()
-
-                    setTimeout(() => {
-                        newSaveTitleBtn.innerHTML = originalHtml
                         lucide.createIcons()
                     }, 2000)
                 })
