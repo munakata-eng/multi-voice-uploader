@@ -924,20 +924,283 @@ function publishToVoicy(basename) {
     }
 }
 
-async function publishToSpotify(basename) {
-    try {
-        showToast('Spotifyのエピソード作成ページへ移動中...')
-        const result = await ipcRenderer.invoke('publish-to-spotify', basename)
-        if (result && result.success) {
-            showToast('Spotifyのエピソード作成ページへ移動しました')
-            return
-        }
+// Spotify投稿モーダル関連の変数
+let currentSpotifyTargetFile = null
 
-        const message = result && result.message ? result.message : 'Spotifyへの移動に失敗しました'
-        showToast(message, 'error')
+// Spotifyに投稿（グローバル関数として定義）
+window.publishToSpotify = async function publishToSpotify(basename, initialDate) {
+    console.log('Spotify投稿関数が呼び出されました:', basename, 'InitialDate:', initialDate)
+    currentSpotifyTargetFile = basename
+
+    // UIを更新
+    const modal = document.getElementById('spotifyPublishModal')
+    try {
+        if (modal) {
+            let dateStr = ''
+
+            // 優先順位:
+            // 1. 引数で渡された日時 (initialDate) - カードに表示されている日時
+            // 2. ファイル名から解析された日時
+            // 3. 明日
+
+            if (initialDate && !isNaN(new Date(initialDate).getTime())) {
+                // initialDateが有効な場合
+                const d = new Date(initialDate)
+                const year = d.getFullYear()
+                const month = String(d.getMonth() + 1).padStart(2, '0')
+                const day = String(d.getDate()).padStart(2, '0')
+                dateStr = `${year}-${month}-${day}`
+            } else {
+                // フォールバック: ファイル名または明日
+                let targetDate = new Date()
+                targetDate.setDate(targetDate.getDate() + 1)
+
+                try {
+                    const dateMatch = basename.match(/^(\d{4})(\d{2})(\d{2})/)
+                    if (dateMatch) {
+                        const year = parseInt(dateMatch[1])
+                        const month = parseInt(dateMatch[2]) - 1
+                        const day = parseInt(dateMatch[3])
+                        const fileDate = new Date(year, month, day)
+                        if (!isNaN(fileDate.getTime())) {
+                            targetDate = fileDate
+                        }
+                    }
+                } catch (e) {
+                    console.error('日付解析エラー:', e)
+                }
+
+                const year = targetDate.getFullYear()
+                const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+                const day = String(targetDate.getDate()).padStart(2, '0')
+                dateStr = `${year}-${month}-${day}`
+            }
+
+            const dateInput = document.getElementById('spotifyPublishDate')
+            if (dateInput) {
+                dateInput.value = dateStr
+            }
+
+            // タイトルの設定
+            const titleInput = document.getElementById('spotifyBroadcastTitle')
+            if (titleInput) {
+                // メタデータからタイトルを取得
+                const currentMetadata = metadata[basename] || {}
+                titleInput.value = currentMetadata.title || ''
+            }
+
+            // 時間のデフォルト値を読み込み
+            const savedTime = await ipcRenderer.invoke('get-config', 'spotifyDefaultTime')
+            const timeInput = document.getElementById('spotifyPublishTime')
+            if (timeInput) {
+                timeInput.value = savedTime || '06:00'
+            }
+
+            // 時間保存ボタンのイベントリスナー
+            const saveTimeBtn = document.getElementById('saveSpotifyTimeDefaultBtn')
+            if (saveTimeBtn) {
+                const newSaveTimeBtn = saveTimeBtn.cloneNode(true)
+                saveTimeBtn.parentNode.replaceChild(newSaveTimeBtn, saveTimeBtn)
+
+                newSaveTimeBtn.addEventListener('click', () => {
+                    const currentTime = document.getElementById('spotifyPublishTime').value
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultTime', currentTime)
+
+                    // ボタンの見た目を更新
+                    const originalHtml = newSaveTimeBtn.innerHTML
+                    newSaveTimeBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>保存しました'
+                    lucide.createIcons()
+
+                    setTimeout(() => {
+                        newSaveTimeBtn.innerHTML = originalHtml
+                        lucide.createIcons()
+                    }, 2000)
+                })
+            }
+
+            // タイトル保存ボタンのイベントリスナー
+            const saveTitleBtn = document.getElementById('saveSpotifyTitleDefaultBtn')
+            if (saveTitleBtn) {
+                const newSaveTitleBtn = saveTitleBtn.cloneNode(true)
+                saveTitleBtn.parentNode.replaceChild(newSaveTitleBtn, saveTitleBtn)
+
+                newSaveTitleBtn.addEventListener('click', () => {
+                    const currentTitle = document.getElementById('spotifyBroadcastTitle').value
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultTitle', currentTitle)
+
+                    // ボタンの見た目を更新
+                    const originalHtml = newSaveTitleBtn.innerHTML
+                    newSaveTitleBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>保存しました'
+                    lucide.createIcons()
+
+                    setTimeout(() => {
+                        newSaveTitleBtn.innerHTML = originalHtml
+                        lucide.createIcons()
+                    }, 2000)
+                })
+            }
+
+            // 説明文のデフォルト値を読み込み
+            const savedDescription = await ipcRenderer.invoke('get-config', 'spotifyDefaultDescription')
+            const descriptionInput = document.getElementById('spotifyDescription')
+            if (descriptionInput) {
+                const defaultDesc = ''
+                descriptionInput.value = savedDescription !== null && savedDescription !== undefined ? savedDescription : defaultDesc
+            }
+
+            // 説明文保存ボタンのイベントリスナー
+            const saveDescBtn = document.getElementById('saveSpotifyDescriptionDefaultBtn')
+            if (saveDescBtn) {
+                const newSaveDescBtn = saveDescBtn.cloneNode(true)
+                saveDescBtn.parentNode.replaceChild(newSaveDescBtn, saveDescBtn)
+
+                newSaveDescBtn.addEventListener('click', () => {
+                    const currentDesc = document.getElementById('spotifyDescription').value
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultDescription', currentDesc)
+
+                    // ボタンの見た目を更新
+                    const originalHtml = newSaveDescBtn.innerHTML
+                    newSaveDescBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>保存しました'
+                    lucide.createIcons()
+
+                    setTimeout(() => {
+                        newSaveDescBtn.innerHTML = originalHtml
+                        lucide.createIcons()
+                    }, 2000)
+                })
+            }
+
+            // 放送画像設定の初期化
+            const savedImage = await ipcRenderer.invoke('get-config', 'spotifyDefaultImage')
+            const imageStatus = document.getElementById('spotifyImageStatus')
+            const imagePreview = document.getElementById('spotifyImagePreview')
+            const imageInfo = document.getElementById('spotifyImageInfo')
+            const imageName = document.getElementById('spotifyImageName')
+            const clearImageBtn = document.getElementById('clearSpotifyImageBtn')
+            const imageInput = document.getElementById('spotifyImageInput')
+            const selectImageBtn = document.getElementById('selectSpotifyImageBtn')
+
+            const updateImageUI = (path) => {
+                console.log('Updating Image UI with path:', path)
+                if (path) {
+                    // ファイルが存在するか確認（非同期だがUI更新は先に行う）
+                    ipcRenderer.invoke('check-file-exists', path).then(exists => {
+                        if (!exists) {
+                            console.warn('Saved image file not found:', path)
+                        } else {
+                            console.log('Saved image file confirmed to exist')
+                        }
+                    })
+
+                    if (imageStatus) imageStatus.classList.add('hidden')
+
+                    if (imagePreview) {
+                        // file:// プロトコルを明示的に付与
+                        const srcPath = path.startsWith('file://') ? path : `file://${path}`
+                        imagePreview.src = srcPath
+                        imagePreview.classList.remove('hidden')
+                    }
+
+                    if (imageInfo) {
+                        imageInfo.classList.remove('hidden')
+                        imageInfo.classList.add('flex')
+                    }
+
+                    if (imageName) {
+                        const filename = path.split(/[/\\]/).pop()
+                        imageName.textContent = filename || path
+                        imageName.classList.remove('hidden')
+                    }
+
+                    if (clearImageBtn) clearImageBtn.classList.remove('hidden')
+                } else {
+                    if (imageStatus) {
+                        imageStatus.classList.remove('hidden')
+                        imageStatus.textContent = '未設定'
+                    }
+
+                    if (imagePreview) {
+                        imagePreview.classList.add('hidden')
+                        imagePreview.src = ''
+                    }
+
+                    if (imageInfo) {
+                        imageInfo.classList.add('hidden')
+                        imageInfo.classList.remove('flex')
+                    }
+
+                    if (imageName) {
+                        imageName.classList.add('hidden')
+                        imageName.textContent = ''
+                    }
+
+                    if (clearImageBtn) clearImageBtn.classList.add('hidden')
+                }
+            }
+
+            // 保存された画像パスを設定
+            updateImageUI(savedImage || null)
+
+            // 画像選択ボタンのイベントリスナー
+            if (selectImageBtn && imageInput) {
+                const newSelectImageBtn = selectImageBtn.cloneNode(true)
+                selectImageBtn.parentNode.replaceChild(newSelectImageBtn, selectImageBtn)
+
+                newSelectImageBtn.addEventListener('click', () => {
+                    imageInput.click()
+                })
+            }
+
+            // 画像入力のイベントリスナー
+            if (imageInput) {
+                const newImageInput = imageInput.cloneNode(true)
+                imageInput.parentNode.replaceChild(newImageInput, imageInput)
+
+                newImageInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0]
+                    if (file) {
+                        const filePath = file.path
+                        await ipcRenderer.invoke('set-config', 'spotifyDefaultImage', filePath)
+                        updateImageUI(filePath)
+                    }
+                })
+            }
+
+            // 画像クリアボタンのイベントリスナー
+            if (clearImageBtn) {
+                const newClearImageBtn = clearImageBtn.cloneNode(true)
+                clearImageBtn.parentNode.replaceChild(newClearImageBtn, clearImageBtn)
+
+                newClearImageBtn.addEventListener('click', async () => {
+                    await ipcRenderer.invoke('set-config', 'spotifyDefaultImage', '')
+                    updateImageUI(null)
+                    if (imageInput) {
+                        imageInput.value = ''
+                    }
+                })
+            }
+
+            // 投稿ボタンのイベントリスナー
+            const confirmBtn = document.getElementById('confirmSpotifyPublishBtn')
+            if (confirmBtn) {
+                const newConfirmBtn = confirmBtn.cloneNode(true)
+                confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn)
+
+                newConfirmBtn.addEventListener('click', () => {
+                    executeSpotifyPublish()
+                })
+            }
+
+            // モーダルを表示
+            modal.classList.remove('opacity-0', 'pointer-events-none')
+            modal.setAttribute('aria-hidden', 'false')
+            lucide.createIcons()
+        } else {
+            console.error('Spotify投稿モーダルが見つかりません')
+        }
     } catch (error) {
-        console.error('Spotify投稿エラー:', error)
-        showToast('Spotifyページを開けませんでした', 'error')
+        console.error('Spotify投稿モーダル表示中にエラーが発生しました:', error)
+        alert('エラーが発生しました: ' + error.message)
     }
 }
 
@@ -1502,6 +1765,73 @@ window.closeStandfmPublishModal = function () {
     }
 }
 
+// Spotify投稿処理の実行
+async function executeSpotifyPublish() {
+    if (!currentSpotifyTargetFile) return
+
+    try {
+        const description = document.getElementById('spotifyDescription').value
+        const imagePath = await ipcRenderer.invoke('get-config', 'spotifyDefaultImage') || ''
+        const publishDate = document.getElementById('spotifyPublishDate') ? document.getElementById('spotifyPublishDate').value : ''
+        const publishTime = document.getElementById('spotifyPublishTime') ? document.getElementById('spotifyPublishTime').value : ''
+        const broadcastTitle = document.getElementById('spotifyBroadcastTitle') ? document.getElementById('spotifyBroadcastTitle').value : ''
+
+        const button = document.getElementById('confirmSpotifyPublishBtn')
+        const originalHTML = button.innerHTML
+
+        console.log('ボタンを無効化します')
+
+        // ボタンを無効化してローディング状態にする
+        button.disabled = true
+        button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>投稿中...'
+        lucide.createIcons()
+
+        console.log(`IPCでSpotify投稿を開始します。Title: ${broadcastTitle}, Image: ${imagePath}, Date: ${publishDate}, Time: ${publishTime}`)
+
+        const result = await ipcRenderer.invoke('publish-to-spotify',
+            currentSpotifyTargetFile,
+            broadcastTitle,
+            description,
+            imagePath
+        )
+        console.log('Spotify投稿結果:', result)
+
+        if (result.success) {
+            console.log(result.message)
+            closeSpotifyPublishModal()
+            // Spotify投稿済みステータスを更新
+            await loadAudioFiles()
+            showToast('Spotifyへの投稿が完了しました！')
+        } else {
+            showToast(`Spotify投稿エラー: ${result.message}`, 'error')
+        }
+
+        button.innerHTML = originalHTML
+        button.disabled = false
+        lucide.createIcons()
+
+    } catch (error) {
+        console.error('Spotify投稿エラー:', error)
+        showToast('Spotify投稿の実行に失敗しました: ' + error.message, 'error')
+
+        const button = document.getElementById('confirmSpotifyPublishBtn')
+        if (button) {
+            button.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>投稿する'
+            button.disabled = false
+            lucide.createIcons()
+        }
+    }
+}
+
+// Spotify投稿モーダルを閉じる
+window.closeSpotifyPublishModal = function () {
+    const modal = document.getElementById('spotifyPublishModal')
+    if (modal) {
+        modal.classList.add('opacity-0', 'pointer-events-none')
+        currentSpotifyTargetFile = null
+    }
+}
+
 
 
 // 外部URLを開く
@@ -1553,4 +1883,5 @@ window.transcribeAudio = transcribeAudio;
 window.copyTranscriptionPrompt = copyTranscriptionPrompt;
 window.downloadTranscription = downloadTranscription;
 window.publishToVoicy = publishToVoicy;
-window.publishToSpotify = publishToSpotify
+window.publishToSpotify = publishToSpotify;
+window.closeSpotifyPublishModal = closeSpotifyPublishModal

@@ -713,6 +713,131 @@
         </div>
     </div>
 
+    <!-- Spotify投稿設定モーダル -->
+    <div id="spotifyPublishModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"
+        aria-hidden="true">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+            onclick="closeSpotifyPublishModal()"></div>
+
+        <!-- Modal Content -->
+        <div
+            class="relative bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300 ring-1 ring-white/10 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50 shrink-0">
+                <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <span class="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg"><i data-lucide="music"
+                            class="w-5 h-5"></i></span>
+                    Spotify投稿設定
+                </h2>
+                <button
+                    class="custom-close-btn p-1.5 text-slate-400 hover:text-slate-300 hover:bg-slate-800 rounded-full transition-colors"
+                    onclick="closeSpotifyPublishModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="spotifyPublishForm" class="space-y-5">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="spotifyBroadcastTitle"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">エピソードタイトル</label>
+                            <button type="button" id="saveSpotifyTitleDefaultBtn"
+                                class="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <input type="text" id="spotifyBroadcastTitle" name="broadcastTitle" placeholder="タイトルを入力"
+                            class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-200 font-medium placeholder-slate-600">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label for="spotifyPublishDate"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider pb-2">公開日</label>
+                            <input type="date" id="spotifyPublishDate" name="publishDate"
+                                class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-200 font-medium cursor-pointer dark-date-input">
+                        </div>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <label for="spotifyPublishTime"
+                                    class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">公開時間</label>
+                                <button type="button" id="saveSpotifyTimeDefaultBtn"
+                                    class="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                    <i data-lucide="save" class="w-3 h-3"></i>
+                                    デフォルトとして保存
+                                </button>
+                            </div>
+                            <input type="time" id="spotifyPublishTime" name="publishTime" value="06:00"
+                                class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-200 font-medium cursor-pointer dark-time-input">
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">エピソード画像</label>
+                        <div class="flex items-center gap-3">
+                            <div id="spotifyImageContainer"
+                                class="flex-1 flex items-center gap-3 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl min-h-[52px]">
+                                <span id="spotifyImageStatus" class="text-sm text-slate-500">未設定</span>
+                                <img id="spotifyImagePreview"
+                                    class="h-10 w-10 object-cover rounded-md hidden shadow-sm border border-slate-700 bg-slate-800"
+                                    src="" alt="Preview">
+                                <div id="spotifyImageInfo" class="flex flex-col hidden overflow-hidden">
+                                    <span class="text-xs font-bold text-slate-300">設定済み</span>
+                                    <span id="spotifyImageName"
+                                        class="text-[10px] text-slate-500 font-mono truncate max-w-[120px]"></span>
+                                </div>
+                            </div>
+
+                            <input type="file" id="spotifyImageInput" accept="image/*" class="hidden">
+
+                            <div class="flex items-center gap-1">
+                                <button type="button" id="selectSpotifyImageBtn"
+                                    class="px-3 py-2.5 bg-slate-800 border border-slate-700 text-slate-300 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center gap-1.5">
+                                    <i data-lucide="image" class="w-4 h-4"></i>
+                                    選択
+                                </button>
+                                <button type="button" id="clearSpotifyImageBtn"
+                                    class="px-3 py-2.5 bg-slate-800 border border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 rounded-xl text-sm font-bold transition-all shadow-sm hidden">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500">※事前に設定したデフォルト画像が使用されます</p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="spotifyDescription"
+                                class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">エピソードの説明</label>
+                            <button type="button" id="saveSpotifyDescriptionDefaultBtn"
+                                class="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                                <i data-lucide="save" class="w-3 h-3"></i>
+                                デフォルトとして保存
+                            </button>
+                        </div>
+                        <textarea id="spotifyDescription" name="description" rows="5" placeholder="エピソードの説明"
+                            class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-200 font-medium placeholder-slate-600 resize-none leading-relaxed"></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 p-6 border-t border-slate-800 bg-slate-900/50 shrink-0">
+                <button type="button"
+                    class="px-5 py-2.5 text-slate-400 bg-slate-900 border border-slate-700 hover:bg-slate-800 rounded-xl text-sm font-semibold transition-colors shadow-sm active:bg-slate-800"
+                    onclick="closeSpotifyPublishModal()">
+                    キャンセル
+                </button>
+                <button type="button" id="confirmSpotifyPublishBtn"
+                    class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-emerald-500/30 active:scale-95 transform flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    投稿する
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 文字起こしセットアップヘルプモーダル -->
     <div id="transcribeHelpModal"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"

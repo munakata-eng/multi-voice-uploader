@@ -27,10 +27,44 @@ async function waitForUrlToContain(page, substr, timeoutMs) {
 }
 
 function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, getAppPaths }) {
-  ipcMain.handle('publish-to-spotify', async (event, basename) => {
+  ipcMain.handle('publish-to-spotify', async (event, basename, broadcastTitle, description, imagePath) => {
     try {
       console.log('[Spotify] 処理開始')
       const page = await getPageInstance()
+
+      const { mdDir } = getAppPaths()
+
+      // タイトルの決定: 引数で渡されたものを優先、なければMDファイルから取得
+      let title = broadcastTitle || ''
+
+      if (!title) {
+        // MDファイルからタイトルを取得
+        const mdFile = path.join(mdDir, basename + '.md')
+        if (await fs.pathExists(mdFile)) {
+          try {
+            const mdContent = await fs.readFile(mdFile, 'utf8')
+            const h1Match = mdContent.match(/^# (.+)$/m)
+            if (h1Match) {
+              title = h1Match[1].trim()
+            }
+          } catch (error) {
+            console.error(`[Spotify] MDファイル読み込みエラー ${basename}:`, error)
+          }
+        }
+      }
+
+      // MDファイルからタイトルが取得できなかった場合は、ファイル名を使用
+      if (!title) {
+        // yyyyMMdd_ の形式を取り除く
+        const nameMatch = basename.match(/^\d{8}_(.+)$/)
+        if (nameMatch) {
+          title = nameMatch[1]
+        } else {
+          title = basename
+        }
+      }
+
+      console.log(`[Spotify] 使用するタイトル: ${title}`)
 
       // 1) loginページへ
       console.log('[Spotify] ステップ1: ログインページへ遷移中...')
@@ -113,7 +147,7 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
         } else {
           // ログインボタンが見つからない場合、自動リダイレクトを待つ
           console.log('[Spotify] ログインボタンが見つかりませんでした。自動リダイレクトを待機中...')
-          currentUrl = await waitForUrlToContain(page, '/pod/show/', 60000)
+        currentUrl = await waitForUrlToContain(page, '/pod/show/', 60000)
           console.log('[Spotify] 自動リダイレクト後のURL:', currentUrl)
         }
       } else {
@@ -267,10 +301,263 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
       // アップロードが完了するまで少し待機
       await new Promise(resolve => setTimeout(resolve, 3000))
 
+      // 8) タイトルの設定
+      console.log('[Spotify] ステップ8: タイトルの設定を開始...')
+      if (title) {
+        try {
+          // 複数のセレクターを試す
+          const titleSelectors = [
+            '#title-input',
+            'input[name="title"]',
+            'input[id*="title"]',
+            'input[placeholder*="タイトル"]',
+            'input[placeholder*="エピソード"]'
+          ]
+
+          let titleInput = null
+          for (const selector of titleSelectors) {
+            try {
+              console.log(`[Spotify] タイトル入力欄を探しています: "${selector}"`)
+              await page.waitForSelector(selector, { timeout: 5000 })
+              titleInput = await page.$(selector)
+              if (titleInput) {
+                console.log(`[Spotify] タイトル入力欄を見つけました: "${selector}"`)
+                break
+              }
+            } catch (e) {
+              console.log(`[Spotify] タイトル入力欄が見つかりませんでした: "${selector}"`)
+            }
+          }
+
+          if (titleInput) {
+            await titleInput.click()
+            await titleInput.focus()
+
+            // 既存の内容をクリア
+            await page.keyboard.down('Control')
+            await page.keyboard.press('KeyA')
+            await page.keyboard.up('Control')
+
+            // タイトルを入力
+            await titleInput.type(title)
+            console.log(`[Spotify] タイトルを設定しました: ${title}`)
+          } else {
+            console.log('[Spotify] タイトル入力欄が見つかりませんでした')
+          }
+        } catch (titleError) {
+          console.error('[Spotify] タイトル設定でエラーが発生しました:', titleError.message)
+        }
+      } else {
+        console.log('[Spotify] タイトルが指定されていないため、スキップします')
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // 9) 説明文の設定
+      console.log('[Spotify] ステップ9: 説明文の設定を開始...')
+      const finalDescription = description || ''
+
+      if (finalDescription) {
+        try {
+          // 複数のセレクターを試す（contenteditableのdivを優先）
+          const descriptionSelectors = [
+            '[name="description"][contenteditable="true"]',
+            '[data-slate-editor="true"]',
+            '[name="description"]',
+            '[contenteditable="true"]',
+            'div[role="textbox"]'
+          ]
+
+          let descriptionElement = null
+          for (const selector of descriptionSelectors) {
+            try {
+              console.log(`[Spotify] 説明文入力欄を探しています: "${selector}"`)
+              await page.waitForSelector(selector, { timeout: 5000 })
+              descriptionElement = await page.$(selector)
+              if (descriptionElement) {
+                // name属性がdescriptionか確認
+                const nameAttr = await page.evaluate(el => el.getAttribute('name'), descriptionElement)
+                if (nameAttr === 'description' || selector.includes('slate-editor')) {
+                  console.log(`[Spotify] 説明文入力欄を見つけました: "${selector}"`)
+                  break
+                }
+              }
+            } catch (e) {
+              console.log(`[Spotify] 説明文入力欄が見つかりませんでした: "${selector}"`)
+            }
+          }
+
+          if (descriptionElement) {
+            // contenteditableのdivの場合
+            await descriptionElement.click()
+            await descriptionElement.focus()
+
+            // 既存の内容をクリア
+            await page.evaluate((el) => {
+              el.textContent = ''
+              el.innerHTML = ''
+              // Slateエディタの場合は、空の段落を設定
+              if (el.hasAttribute('data-slate-editor')) {
+                el.innerHTML = '<p><br></p>'
+              }
+            }, descriptionElement)
+
+            // 少し待ってから入力
+            await new Promise(resolve => setTimeout(resolve, 300))
+
+            // 説明文を入力（typeで入力）
+            await descriptionElement.type(finalDescription)
+            console.log(`[Spotify] 説明文を設定しました`)
+          } else {
+            console.log('[Spotify] 説明文入力欄が見つかりませんでした')
+          }
+        } catch (descError) {
+          console.error('[Spotify] 説明文設定でエラーが発生しました:', descError.message)
+        }
+      } else {
+        console.log('[Spotify] 説明文が指定されていないため、スキップします')
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // 10) 画像のアップロード（画像が選択されている場合）
+      console.log('[Spotify] ステップ10: 画像のアップロードを確認中...')
+      if (imagePath) {
+        try {
+          // 画像ファイルの存在確認
+          const normalizedImagePath = path.normalize(imagePath)
+          const imageExists = await fs.pathExists(normalizedImagePath)
+
+          if (imageExists) {
+            console.log(`[Spotify] 画像ファイルが見つかりました: ${normalizedImagePath}`)
+
+            // 画像アップロード用のinput要素を探す
+            const imageSelectors = [
+              'input[type="file"][accept*="image"]',
+              'input[type="file"][accept*="png"]',
+              'input[type="file"][accept*="jpeg"]',
+              'input[type="file"][accept*="jpg"]',
+              'input[type="file"][accept*="gif"]',
+              'input[type="file"][accept*="webp"]'
+            ]
+
+            let imageInput = null
+            for (const selector of imageSelectors) {
+              try {
+                console.log(`[Spotify] 画像input要素を探しています: "${selector}"`)
+                await page.waitForSelector(selector, { timeout: 5000 })
+                imageInput = await page.$(selector)
+                if (imageInput) {
+                  // accept属性を確認して、画像ファイル形式が含まれているかチェック
+                  const acceptAttr = await page.evaluate(el => el.getAttribute('accept'), imageInput)
+                  console.log(`[Spotify] 画像input要素が見つかりました: "${selector}", accept="${acceptAttr}"`)
+
+                  // accept属性に画像ファイル形式が含まれているか確認
+                  if (acceptAttr && (
+                    acceptAttr.includes('image') ||
+                    acceptAttr.includes('png') ||
+                    acceptAttr.includes('jpeg') ||
+                    acceptAttr.includes('jpg') ||
+                    acceptAttr.includes('gif') ||
+                    acceptAttr.includes('webp')
+                  )) {
+                    console.log(`[Spotify] 画像用のinput要素を特定しました`)
+                    break
+                  } else if (!acceptAttr) {
+                    // accept属性がない場合は、汎用的なinput[type="file"]として使用
+                    console.log(`[Spotify] accept属性がないため、汎用的なinputとして使用します`)
+                    break
+                  }
+                }
+              } catch (e) {
+                console.log(`[Spotify] 画像input要素が見つかりませんでした: "${selector}"`)
+              }
+            }
+
+            // フォールバック: data-cy="imageUploaderDropzone" の親要素からinputを探す
+            if (!imageInput) {
+              console.log('[Spotify] フォールバック: data-cy="imageUploaderDropzone" を探しています...')
+              try {
+                await page.waitForSelector('[data-cy="imageUploaderDropzone"]', { timeout: 5000 })
+
+                // 親要素からinputを探す（evaluateでセレクターを取得）
+                const inputSelector = await page.evaluate(() => {
+                  const dropzone = document.querySelector('[data-cy="imageUploaderDropzone"]')
+                  if (dropzone) {
+                    // 親要素を取得
+                    const parent = dropzone.closest('div')
+                    if (parent) {
+                      // 親要素内のinput[type="file"]を探す
+                      const input = parent.querySelector('input[type="file"]')
+                      if (input) {
+                        // 一意のセレクターを生成
+                        const accept = input.getAttribute('accept')
+                        if (accept) {
+                          return `input[type="file"][accept="${accept}"]`
+                        }
+                        return 'input[type="file"]'
+                      }
+                    }
+                  }
+                  return null
+                })
+
+                if (inputSelector) {
+                  imageInput = await page.$(inputSelector)
+                  if (imageInput) {
+                    console.log('[Spotify] data-cy="imageUploaderDropzone" 関連のinput要素を見つけました')
+                  }
+                }
+
+                if (!imageInput) {
+                  // 直接inputを探す
+                  imageInput = await page.$('input[type="file"][accept*="image"]')
+                }
+              } catch (e) {
+                console.log('[Spotify] data-cy="imageUploaderDropzone" が見つかりませんでした')
+              }
+            }
+
+            // さらにフォールバック: すべてのinput[type="file"]を確認
+            if (!imageInput) {
+              console.log('[Spotify] 最終フォールバック: すべてのinput[type="file"]を確認中...')
+              const allFileInputs = await page.$$('input[type="file"]')
+              for (const input of allFileInputs) {
+                const acceptAttr = await page.evaluate(el => el.getAttribute('accept'), input)
+                if (acceptAttr && acceptAttr.includes('image')) {
+                  imageInput = input
+                  console.log('[Spotify] 画像用のinput要素を最終的に見つけました')
+                  break
+                }
+              }
+            }
+
+            if (imageInput) {
+              // 画像ファイルをアップロード
+              console.log(`[Spotify] 画像ファイルをアップロード中: ${normalizedImagePath}`)
+              await imageInput.uploadFile(normalizedImagePath)
+              console.log('[Spotify] 画像ファイルのアップロードが完了しました')
+
+              // アップロードが完了するまで少し待機
+              await new Promise(resolve => setTimeout(resolve, 2000))
+            } else {
+              console.log('[Spotify] 画像アップロード用のinput要素が見つかりませんでした。画像のアップロードをスキップします')
+            }
+          } else {
+            console.log(`[Spotify] 画像ファイルが見つかりませんでした: ${normalizedImagePath}`)
+          }
+        } catch (imageError) {
+          console.error('[Spotify] 画像アップロードでエラーが発生しました:', imageError.message)
+          // 画像アップロードのエラーは致命的ではないため、処理を続行
+        }
+      } else {
+        console.log('[Spotify] 画像が指定されていないため、画像のアップロードをスキップします')
+      }
+
       console.log('[Spotify] 処理完了')
       return {
         success: true,
-        message: 'Spotifyのエピソード作成ページへ移動し、音声ファイルをアップロードしました',
+        message: 'Spotifyのエピソード作成ページへ移動し、音声ファイルをアップロードし、タイトルと説明文を設定しました',
         browser: true,
         wizardUrl
       }
