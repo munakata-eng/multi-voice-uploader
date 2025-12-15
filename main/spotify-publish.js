@@ -849,86 +849,108 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
                           // 日時入力UIが表示されるまで待機
                           await new Promise(resolve => setTimeout(resolve, 1000))
 
-                          // 投稿日時と時間を設定（publishDateとpublishTimeが指定されている場合）
-                          if (publishDate && publishTime) {
-                            console.log(`[Spotify] 投稿日時を設定します: ${publishDate} ${publishTime}`)
+          // 投稿日時と時間を設定（publishDateとpublishTimeが指定されている場合）
+          if (publishDate && publishTime) {
+            console.log(`[Spotify] 投稿日時を設定します: ${publishDate} ${publishTime}`)
 
-                            // 日付を設定（YYYY-MM-DD形式をYYYY/MM/DD形式に変換）
-                            const dateParts = publishDate.split('-')
-                            if (dateParts.length === 3) {
-                              const year = parseInt(dateParts[0])
-                              const month = parseInt(dateParts[1])
-                              const day = parseInt(dateParts[2])
-                              const formattedDate = `${dateParts[0]}/${dateParts[1]}/${dateParts[2]}`
-                              console.log(`[Spotify] 日付を設定: ${formattedDate} (年: ${year}, 月: ${month}, 日: ${day})`)
+            // 日付を設定（YYYY-MM-DD形式をそのまま使用）
+            const dateParts = publishDate.split('-')
+            if (dateParts.length === 3) {
+              const year = parseInt(dateParts[0])
+              const month = parseInt(dateParts[1])
+              const day = parseInt(dateParts[2])
+              console.log(`[Spotify] 日付を設定: ${publishDate} (年: ${year}, 月: ${month}, 日: ${day})`)
 
-                              // 日付ボタンを探す（ラベルに「日付」が含まれるボタン）
-                              const dateButton = await page.evaluateHandle(() => {
-                                const buttons = Array.from(document.querySelectorAll('button[type="button"]'))
-                                for (const btn of buttons) {
-                                  const parent = btn.closest('div')
-                                  if (parent) {
-                                    const labelEl = parent.querySelector('label')
-                                    if (labelEl && labelEl.textContent.trim().includes('日付')) {
-                                      return btn
-                                    }
-                                  }
-                                }
-                                return null
-                              })
+              // 日付ボタンを探して直接値を設定
+              console.log('[Spotify] 日付ボタンを探しています...')
+              const dateSet = await page.evaluate((targetDate, targetYear, targetMonth, targetDay) => {
+                // YYYY-MM-DD形式をYYYY/MM/DD形式に変換
+                const formattedDate = `${targetYear}/${String(targetMonth).padStart(2, '0')}/${String(targetDay).padStart(2, '0')}`
 
-                              if (dateButton && dateButton.asElement) {
-                                const element = dateButton.asElement()
-                                if (element) {
-                                  await element.click()
-                                  console.log('[Spotify] 日付ボタンをクリックしました')
+                // ラベルに「日付」が含まれるform-groupを探す
+                const labels = Array.from(document.querySelectorAll('label'))
+                for (const label of labels) {
+                  const labelText = label.textContent || label.innerText || ''
+                  if (labelText.includes('日付')) {
+                    // ラベルの親要素からボタンを探す
+                    const formGroup = label.closest('[data-encore-id="formGroup"]')
+                    if (formGroup) {
+                      const button = formGroup.querySelector('button[type="button"]')
+                      if (button) {
+                        const span = button.querySelector('span')
+                        if (span) {
+                          // spanのテキストを変更
+                          span.textContent = formattedDate
+                          span.innerText = formattedDate
 
-                                  // 日付ピッカー（カレンダー）が表示されるまで待機
-                                  await new Promise(resolve => setTimeout(resolve, 1500))
+                          // ボタンにdata属性を設定（もしあれば）
+                          if (!button.dataset.value) {
+                            button.dataset.value = targetDate
+                          }
 
-                                  // カレンダーから日付を選択
-                                  console.log('[Spotify] カレンダーから日付を選択中...')
-                                  const dateSelected = await page.evaluate((targetYear, targetMonth, targetDay) => {
-                                    // カレンダーの日付セルを探す
-                                    const cells = Array.from(document.querySelectorAll('button, td, div'))
-                                    for (const cell of cells) {
-                                      const text = cell.textContent.trim()
-                                      // 日付の数字を探す（例: "15"）
-                                      if (text === String(targetDay)) {
-                                        // 親要素を確認して、カレンダーの日付セルかどうか判断
-                                        const parent = cell.closest('table, div[role="grid"]')
-                                        if (parent) {
-                                          cell.click()
-                                          console.log(`日付セルをクリック: ${text}`)
-                                          return true
-                                        }
-                                      }
-                                    }
-                                    return false
-                                  }, year, month, day)
+                          // 複数のイベントを発火
+                          const events = ['click', 'change', 'input']
+                          events.forEach(eventType => {
+                            const event = new Event(eventType, { bubbles: true, cancelable: true })
+                            button.dispatchEvent(event)
+                          })
 
-                                  if (dateSelected) {
-                                    console.log('[Spotify] カレンダーから日付を選択しました')
-                                    // 日付ピッカーが閉じるまで待機
-                                    await new Promise(resolve => setTimeout(resolve, 1000))
-                                  } else {
-                                    console.log('[Spotify] カレンダーから日付を選択できませんでした。直接設定を試します...')
-                                    // フォールバック: 日付ボタンのテキストを直接変更
-                                    await page.evaluate((dateStr, btn) => {
-                                      const span = btn.querySelector('span')
-                                      if (span) {
-                                        span.textContent = dateStr
-                                        // イベントを発火
-                                        const changeEvent = new Event('change', { bubbles: true, cancelable: true })
-                                        btn.dispatchEvent(changeEvent)
-                                      }
-                                    }, formattedDate, element)
-                                  }
-                                }
-                              } else {
-                                console.log('[Spotify] 日付ボタンが見つかりませんでした')
-                              }
-                            }
+                          // React用の合成イベントも発火
+                          const syntheticEvent = new Event('change', { bubbles: true, cancelable: true })
+                          Object.defineProperty(syntheticEvent, 'target', { value: button, enumerable: true })
+                          button.dispatchEvent(syntheticEvent)
+
+                          // 親要素のフォームにもイベントを発火
+                          const form = button.closest('form')
+                          if (form) {
+                            const formEvent = new Event('change', { bubbles: true, cancelable: true })
+                            form.dispatchEvent(formEvent)
+                          }
+
+                          console.log(`日付ボタンのspanを更新しました: ${formattedDate}`)
+                          return true
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // フォールバック: input[type="date"]を探す
+                const dateInput = document.querySelector('input[type="date"]')
+                if (dateInput) {
+                  dateInput.value = targetDate
+                  const events = ['input', 'change', 'blur']
+                  events.forEach(eventType => {
+                    const event = new Event(eventType, { bubbles: true, cancelable: true })
+                    dateInput.dispatchEvent(event)
+                  })
+                  console.log(`日付入力欄に値を設定しました: ${targetDate}`)
+                  return true
+                }
+
+                // フォールバック: hidden inputを探す
+                const hiddenInputs = Array.from(document.querySelectorAll('input[type="hidden"]'))
+                for (const input of hiddenInputs) {
+                  const name = input.name || input.id || ''
+                  if (name.includes('date') || name.includes('Date')) {
+                    input.value = targetDate
+                    const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                    input.dispatchEvent(changeEvent)
+                    console.log(`hidden inputに値を設定しました: ${name} = ${targetDate}`)
+                    return true
+                  }
+                }
+
+                return false
+              }, publishDate, year, month, day)
+
+              if (dateSet) {
+                console.log('[Spotify] 日付を直接設定しました')
+                await new Promise(resolve => setTimeout(resolve, 500))
+              } else {
+                console.log('[Spotify] 日付ボタンが見つかりませんでした')
+              }
+            }
 
                             // 時間を設定（HH:MM形式から時と分を抽出）
                             const timeParts = publishTime.split(':')
@@ -1044,78 +1066,100 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
           if (publishDate && publishTime) {
             console.log(`[Spotify] 投稿日時を設定します: ${publishDate} ${publishTime}`)
 
-            // 日付を設定（YYYY-MM-DD形式をYYYY/MM/DD形式に変換）
+            // 日付を設定（YYYY-MM-DD形式をそのまま使用）
             const dateParts = publishDate.split('-')
             if (dateParts.length === 3) {
               const year = parseInt(dateParts[0])
               const month = parseInt(dateParts[1])
               const day = parseInt(dateParts[2])
-              const formattedDate = `${dateParts[0]}/${dateParts[1]}/${dateParts[2]}`
-              console.log(`[Spotify] 日付を設定: ${formattedDate} (年: ${year}, 月: ${month}, 日: ${day})`)
+              console.log(`[Spotify] 日付を設定: ${publishDate} (年: ${year}, 月: ${month}, 日: ${day})`)
 
-              // 日付ボタンを探す（ラベルに「日付」が含まれるボタン）
-              const dateButton = await page.evaluateHandle(() => {
-                const buttons = Array.from(document.querySelectorAll('button[type="button"]'))
-                for (const btn of buttons) {
-                  const parent = btn.closest('div')
-                  if (parent) {
-                    const labelEl = parent.querySelector('label')
-                    if (labelEl && labelEl.textContent.trim().includes('日付')) {
-                      return btn
-                    }
-                  }
-                }
-                return null
-              })
+              // 日付ボタンを探して直接値を設定
+              console.log('[Spotify] 日付ボタンを探しています...')
+              const dateSet = await page.evaluate((targetDate, targetYear, targetMonth, targetDay) => {
+                // YYYY-MM-DD形式をYYYY/MM/DD形式に変換
+                const formattedDate = `${targetYear}/${String(targetMonth).padStart(2, '0')}/${String(targetDay).padStart(2, '0')}`
 
-              if (dateButton && dateButton.asElement) {
-                const element = dateButton.asElement()
-                if (element) {
-                  await element.click()
-                  console.log('[Spotify] 日付ボタンをクリックしました')
+                // ラベルに「日付」が含まれるform-groupを探す
+                const labels = Array.from(document.querySelectorAll('label'))
+                for (const label of labels) {
+                  const labelText = label.textContent || label.innerText || ''
+                  if (labelText.includes('日付')) {
+                    // ラベルの親要素からボタンを探す
+                    const formGroup = label.closest('[data-encore-id="formGroup"]')
+                    if (formGroup) {
+                      const button = formGroup.querySelector('button[type="button"]')
+                      if (button) {
+                        const span = button.querySelector('span')
+                        if (span) {
+                          // spanのテキストを変更
+                          span.textContent = formattedDate
+                          span.innerText = formattedDate
 
-                  // 日付ピッカー（カレンダー）が表示されるまで待機
-                  await new Promise(resolve => setTimeout(resolve, 1500))
+                          // ボタンにdata属性を設定（もしあれば）
+                          if (!button.dataset.value) {
+                            button.dataset.value = targetDate
+                          }
 
-                  // カレンダーから日付を選択
-                  console.log('[Spotify] カレンダーから日付を選択中...')
-                  const dateSelected = await page.evaluate((targetYear, targetMonth, targetDay) => {
-                    // カレンダーの日付セルを探す
-                    const cells = Array.from(document.querySelectorAll('button, td, div'))
-                    for (const cell of cells) {
-                      const text = cell.textContent.trim()
-                      // 日付の数字を探す（例: "15"）
-                      if (text === String(targetDay)) {
-                        // 親要素を確認して、カレンダーの日付セルかどうか判断
-                        const parent = cell.closest('table, div[role="grid"]')
-                        if (parent) {
-                          cell.click()
-                          console.log(`日付セルをクリック: ${text}`)
+                          // 複数のイベントを発火
+                          const events = ['click', 'change', 'input']
+                          events.forEach(eventType => {
+                            const event = new Event(eventType, { bubbles: true, cancelable: true })
+                            button.dispatchEvent(event)
+                          })
+
+                          // React用の合成イベントも発火
+                          const syntheticEvent = new Event('change', { bubbles: true, cancelable: true })
+                          Object.defineProperty(syntheticEvent, 'target', { value: button, enumerable: true })
+                          button.dispatchEvent(syntheticEvent)
+
+                          // 親要素のフォームにもイベントを発火
+                          const form = button.closest('form')
+                          if (form) {
+                            const formEvent = new Event('change', { bubbles: true, cancelable: true })
+                            form.dispatchEvent(formEvent)
+                          }
+
+                          console.log(`日付ボタンのspanを更新しました: ${formattedDate}`)
                           return true
                         }
                       }
                     }
-                    return false
-                  }, year, month, day)
-
-                  if (dateSelected) {
-                    console.log('[Spotify] カレンダーから日付を選択しました')
-                    // 日付ピッカーが閉じるまで待機
-                    await new Promise(resolve => setTimeout(resolve, 1000))
-                  } else {
-                    console.log('[Spotify] カレンダーから日付を選択できませんでした。直接設定を試します...')
-                    // フォールバック: 日付ボタンのテキストを直接変更
-                    await page.evaluate((dateStr, btn) => {
-                      const span = btn.querySelector('span')
-                      if (span) {
-                        span.textContent = dateStr
-                        // イベントを発火
-                        const changeEvent = new Event('change', { bubbles: true, cancelable: true })
-                        btn.dispatchEvent(changeEvent)
-                      }
-                    }, formattedDate, element)
                   }
                 }
+
+                // フォールバック: input[type="date"]を探す
+                const dateInput = document.querySelector('input[type="date"]')
+                if (dateInput) {
+                  dateInput.value = targetDate
+                  const events = ['input', 'change', 'blur']
+                  events.forEach(eventType => {
+                    const event = new Event(eventType, { bubbles: true, cancelable: true })
+                    dateInput.dispatchEvent(event)
+                  })
+                  console.log(`日付入力欄に値を設定しました: ${targetDate}`)
+                  return true
+                }
+
+                // フォールバック: hidden inputを探す
+                const hiddenInputs = Array.from(document.querySelectorAll('input[type="hidden"]'))
+                for (const input of hiddenInputs) {
+                  const name = input.name || input.id || ''
+                  if (name.includes('date') || name.includes('Date')) {
+                    input.value = targetDate
+                    const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                    input.dispatchEvent(changeEvent)
+                    console.log(`hidden inputに値を設定しました: ${name} = ${targetDate}`)
+                    return true
+                  }
+                }
+
+                return false
+              }, publishDate, year, month, day)
+
+              if (dateSet) {
+                console.log('[Spotify] 日付を直接設定しました')
+                await new Promise(resolve => setTimeout(resolve, 500))
               } else {
                 console.log('[Spotify] 日付ボタンが見つかりませんでした')
               }
