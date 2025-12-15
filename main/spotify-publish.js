@@ -389,48 +389,59 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
           }
 
           if (descriptionElement) {
-            // contenteditableのdivの場合、evaluateで直接DOMを操作
+            // Slateエディタの場合、キーボード入力をシミュレートする方法を使用
             console.log(`[Spotify] 説明文を設定します: "${finalDescription}"`)
 
-            await page.evaluate((el, text) => {
-              // 既存の内容をクリア
-              el.textContent = ''
-              el.innerHTML = ''
+            // クリックしてフォーカスを当てる
+            await descriptionElement.click()
+            await descriptionElement.focus()
+            await new Promise(resolve => setTimeout(resolve, 500))
 
-              // Slateエディタの場合は、適切な構造でテキストを設定
-              if (el.hasAttribute('data-slate-editor')) {
-                // Slateエディタの構造に合わせて設定
-                el.innerHTML = `<p>${text}</p>`
+            // 既存の内容を全選択して削除
+            await page.keyboard.down('Control')
+            await page.keyboard.press('KeyA')
+            await page.keyboard.up('Control')
+            await new Promise(resolve => setTimeout(resolve, 200))
 
-                // Slateエディタの内部状態を更新するためにイベントを発火
-                const inputEvent = new Event('input', { bubbles: true, cancelable: true })
-                el.dispatchEvent(inputEvent)
+            // 削除キーでクリア
+            await page.keyboard.press('Delete')
+            await new Promise(resolve => setTimeout(resolve, 200))
 
-                // Slateの変更イベントを発火
-                const changeEvent = new Event('change', { bubbles: true, cancelable: true })
-                el.dispatchEvent(changeEvent)
-              } else {
-                // 通常のcontenteditableの場合
-                el.textContent = text
-                el.innerHTML = text
+            // Slateエディタの場合は、段落構造を維持するために先に段落を作成
+            const isSlateEditor = await page.evaluate((el) => {
+              return el.hasAttribute('data-slate-editor')
+            }, descriptionElement)
 
-                const inputEvent = new Event('input', { bubbles: true, cancelable: true })
-                el.dispatchEvent(inputEvent)
+            if (isSlateEditor) {
+              // Slateエディタの場合、Enterキーで段落を作成してから入力
+              await page.keyboard.press('Enter')
+              await new Promise(resolve => setTimeout(resolve, 100))
+            }
 
-                const changeEvent = new Event('change', { bubbles: true, cancelable: true })
-                el.dispatchEvent(changeEvent)
+            // テキストを入力（1文字ずつ入力して確実にイベントを発火）
+            console.log('[Spotify] テキストを入力中...')
+            for (let i = 0; i < finalDescription.length; i++) {
+              await page.keyboard.type(finalDescription[i])
+              // 長いテキストの場合は少し待機
+              if (i % 10 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 50))
               }
+            }
 
-              // フォーカスを当てて、値が設定されたことを確認
-              el.focus()
+            // 入力完了を待機
+            await new Promise(resolve => setTimeout(resolve, 500))
 
-              // 少し待ってからblur
-              setTimeout(() => {
-                el.blur()
-              }, 100)
-            }, descriptionElement, finalDescription)
+            // フォーカスを外してバリデーションをトリガー
+            await page.evaluate((el) => {
+              el.blur()
+              // フォームのバリデーションをトリガーするために、親要素のフォームにイベントを発火
+              const form = el.closest('form')
+              if (form) {
+                const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                form.dispatchEvent(changeEvent)
+              }
+            }, descriptionElement)
 
-            // 少し待機
             await new Promise(resolve => setTimeout(resolve, 500))
 
             // 値が正しく設定されたか確認
@@ -440,23 +451,25 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
 
             console.log(`[Spotify] 説明文を設定しました。実際の値: "${actualValue}"`)
 
+            // 値が設定されていない場合、再度試行
             if (!actualValue || actualValue.length === 0) {
-              console.log('[Spotify] 説明文が設定されていないため、別の方法を試します...')
+              console.log('[Spotify] 説明文が設定されていないため、再試行します...')
 
-              // 別の方法: クリックしてからキーボードで入力
+              // 再度クリックしてフォーカス
               await descriptionElement.click()
               await descriptionElement.focus()
               await new Promise(resolve => setTimeout(resolve, 300))
 
-              // 全選択してから入力
+              // 全選択して削除
               await page.keyboard.down('Control')
               await page.keyboard.press('KeyA')
               await page.keyboard.up('Control')
-              await new Promise(resolve => setTimeout(resolve, 100))
+              await page.keyboard.press('Delete')
+              await new Promise(resolve => setTimeout(resolve, 200))
 
               // テキストを入力
               await page.keyboard.type(finalDescription)
-              await new Promise(resolve => setTimeout(resolve, 300))
+              await new Promise(resolve => setTimeout(resolve, 500))
 
               // 再度確認
               const retryValue = await page.evaluate((el) => {
@@ -464,6 +477,36 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
               }, descriptionElement)
 
               console.log(`[Spotify] 再試行後の説明文: "${retryValue}"`)
+
+              // まだ設定されていない場合、evaluateで直接設定を試す
+              if (!retryValue || retryValue.length === 0) {
+                console.log('[Spotify] 最終手段: evaluateで直接設定します...')
+                await page.evaluate((el, text) => {
+                  // Slateエディタの構造に合わせて設定
+                  if (el.hasAttribute('data-slate-editor')) {
+                    el.innerHTML = `<p>${text}</p>`
+                  } else {
+                    el.textContent = text
+                    el.innerHTML = text
+                  }
+
+                  // 複数のイベントを発火
+                  const events = ['beforeinput', 'input', 'change', 'blur']
+                  events.forEach(eventType => {
+                    const event = new Event(eventType, { bubbles: true, cancelable: true })
+                    el.dispatchEvent(event)
+                  })
+
+                  // 親要素にもイベントを発火
+                  const form = el.closest('form')
+                  if (form) {
+                    const formEvent = new Event('change', { bubbles: true, cancelable: true })
+                    form.dispatchEvent(formEvent)
+                  }
+                }, descriptionElement, finalDescription)
+
+                await new Promise(resolve => setTimeout(resolve, 500))
+              }
             }
           } else {
             console.log('[Spotify] 説明文入力欄が見つかりませんでした')
@@ -671,8 +714,41 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
                 }
 
                 if (saveButtonClicked) {
-                  // モーダルが閉じるまで少し待機
-                  await new Promise(resolve => setTimeout(resolve, 2000))
+                  // モーダルが閉じるまで待機
+                  console.log('[Spotify] 画像編集モーダルが閉じるのを待機中...')
+                  try {
+                    // モーダルが非表示になるまで待つ
+                    await page.waitForFunction(
+                      () => {
+                        const modal = document.querySelector('[data-encore-id="dialogConfirmation"]')
+                        const backdrop = document.querySelector('[data-encore-id="backdrop"]')
+                        // モーダルとバックドロップの両方が非表示またはDOMから削除されているか確認
+                        if (!modal && !backdrop) return true
+                        if (modal) {
+                          const style = window.getComputedStyle(modal)
+                          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                            return true
+                          }
+                        }
+                        if (backdrop) {
+                          const style = window.getComputedStyle(backdrop)
+                          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                            return true
+                          }
+                        }
+                        return false
+                      },
+                      { timeout: 15000 }
+                    )
+                    console.log('[Spotify] 画像編集モーダルが閉じました')
+                  } catch (waitError) {
+                    console.log('[Spotify] モーダルが閉じるのを待機中にタイムアウトしました。続行します:', waitError.message)
+                    // タイムアウトしても少し待機してから続行
+                    await new Promise(resolve => setTimeout(resolve, 2000))
+                  }
+
+                  // 少し追加で待機（念のため）
+                  await new Promise(resolve => setTimeout(resolve, 1000))
                   console.log('[Spotify] 画像編集モーダルの処理が完了しました')
 
                   // 「次へ」ボタンを探してクリック
