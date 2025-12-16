@@ -356,7 +356,12 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
       // 9) 説明文の設定（必須項目）
       console.log('[Spotify] ステップ9: 説明文の設定を開始...')
       // 説明文が指定されていない場合は、タイトルを使用
-      const finalDescription = description || title || ''
+      let finalDescription = description || title || ''
+
+      // 改行を<br>に変換（HTML形式で入力するため）
+      if (finalDescription) {
+        finalDescription = finalDescription.replace(/\n/g, '<br>')
+      }
 
       if (finalDescription) {
         try {
