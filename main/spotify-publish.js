@@ -32,7 +32,7 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
       console.log('[Spotify] 処理開始')
       const page = await getPageInstance()
 
-      const { mdDir } = getAppPaths()
+      const { mdDir, metadataPath } = getAppPaths()
 
       // タイトルの決定: 引数で渡されたものを優先、なければMDファイルから取得
       let title = broadcastTitle || ''
@@ -1627,6 +1627,17 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
       } catch (scheduleButtonError) {
         console.log('[Spotify] 「スケジュール」ボタンのクリックでエラーが発生しました（スキップ）:', scheduleButtonError.message)
       }
+
+      // Spotify投稿完了をメタデータに保存
+      const metadata = await fs.pathExists(metadataPath) ? await fs.readJson(metadataPath) : {}
+      if (!metadata[basename]) {
+        metadata[basename] = {}
+      }
+      metadata[basename].spotifyPublished = true
+      metadata[basename].spotifyPublishedDate = new Date().toISOString()
+
+      await fs.writeJson(metadataPath, metadata, { spaces: 2 })
+      console.log(`Spotify published status saved for: ${basename}`)
 
       console.log('[Spotify] 処理完了')
       return {

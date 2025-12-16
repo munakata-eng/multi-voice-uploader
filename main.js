@@ -1353,3 +1353,15 @@ registerSpotifyPublishHandler({
   getPageInstance,
   getAppPaths
 })
+
+// アプリバージョン取得
+ipcMain.handle('get-app-version', async () => {
+  try {
+    const packageJsonPath = path.join(__dirname, 'package.json')
+    const packageJson = await fs.readJson(packageJsonPath)
+    return packageJson.version || '1.0.0'
+  } catch (error) {
+    console.error('Failed to get app version:', error)
+    return '1.0.0'
+  }
+})
