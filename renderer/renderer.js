@@ -4,6 +4,11 @@ let audioFiles = [];
 let metadata = {};
 let currentEditingFile = null;
 let selectedYearMonth = null; // 選択された年月を記録
+let platformSettings = {
+    standfm: true,
+    voicy: true,
+    spotify: true
+};
 
 // DOM要素
 const fileList = document.getElementById('fileList');
@@ -11,7 +16,8 @@ const addFileBtn = document.getElementById('addFileBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const openStandfmBtn = document.getElementById('openStandfmBtn');
 const openVoicyBtn = document.getElementById('openVoicyBtn');
-const openSpotifyBtn = document.getElementById('openSpotifyBtn')
+const openSpotifyBtn = document.getElementById('openSpotifyBtn');
+const settingsBtn = document.getElementById('settingsBtn');
 const filterNoText = document.getElementById('filterNoText');
 const filterUnpublished = document.getElementById('filterUnpublished');
 const yearMonthTabs = document.getElementById('yearMonthTabs');
@@ -25,9 +31,25 @@ const saveEdit = document.getElementById('saveEdit');
 // 初期化
 document.addEventListener('DOMContentLoaded', async () => {
     await loadMetadata();
+    await loadPlatformSettings();
     await loadAudioFiles();
     setupEventListeners();
+    await loadAppVersion();
+    updatePlatformVisibility();
 });
+
+// アプリバージョンを読み込んで表示
+async function loadAppVersion() {
+    try {
+        const version = await ipcRenderer.invoke('get-app-version');
+        const versionElement = document.getElementById('appVersion');
+        if (versionElement) {
+            versionElement.textContent = `v${version}`;
+        }
+    } catch (error) {
+        console.error('Failed to load app version:', error);
+    }
+}
 
 // イベントリスナーの設定
 function setupEventListeners() {
@@ -56,9 +78,15 @@ function setupEventListeners() {
     }
 
     if (openSpotifyBtn) {
-        openSpotifyBtn.addEventListener('click', () => openExternalUrl('https://podcasters.spotify.com/'))
+        openSpotifyBtn.addEventListener('click', () => openExternalUrl('https://creators.spotify.com/pod/login'))
     } else {
         console.error('openSpotifyBtn要素が見つかりません')
+    }
+
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', openPlatformSettingsModal);
+    } else {
+        console.error('settingsBtn要素が見つかりません');
     }
 
     if (filterNoText) {
@@ -124,6 +152,53 @@ async function loadMetadata() {
     }
 }
 
+// プラットフォーム設定を読み込み
+async function loadPlatformSettings() {
+    try {
+        const standfmEnabled = await ipcRenderer.invoke('get-config', 'platformEnabled.standfm');
+        const voicyEnabled = await ipcRenderer.invoke('get-config', 'platformEnabled.voicy');
+        const spotifyEnabled = await ipcRenderer.invoke('get-config', 'platformEnabled.spotify');
+
+        platformSettings.standfm = standfmEnabled !== null && standfmEnabled !== undefined ? standfmEnabled : true;
+        platformSettings.voicy = voicyEnabled !== null && voicyEnabled !== undefined ? voicyEnabled : true;
+        platformSettings.spotify = spotifyEnabled !== null && spotifyEnabled !== undefined ? spotifyEnabled : true;
+    } catch (error) {
+        console.error('プラットフォーム設定の読み込みエラー:', error);
+        // デフォルト値を使用
+        platformSettings = { standfm: true, voicy: true, spotify: true };
+    }
+}
+
+// プラットフォーム設定を保存
+async function savePlatformSettings() {
+    try {
+        await ipcRenderer.invoke('set-config', 'platformEnabled.standfm', platformSettings.standfm);
+        await ipcRenderer.invoke('set-config', 'platformEnabled.voicy', platformSettings.voicy);
+        await ipcRenderer.invoke('set-config', 'platformEnabled.spotify', platformSettings.spotify);
+        return true;
+    } catch (error) {
+        console.error('プラットフォーム設定の保存エラー:', error);
+        return false;
+    }
+}
+
+// プラットフォームの表示/非表示を更新
+function updatePlatformVisibility() {
+    // ヘッダのボタン
+    if (openStandfmBtn) {
+        openStandfmBtn.style.display = platformSettings.standfm ? 'flex' : 'none';
+    }
+    if (openVoicyBtn) {
+        openVoicyBtn.style.display = platformSettings.voicy ? 'flex' : 'none';
+    }
+    if (openSpotifyBtn) {
+        openSpotifyBtn.style.display = platformSettings.spotify ? 'flex' : 'none';
+    }
+
+    // ファイルリストを再描画（各音声ファイルのボタンも更新）
+    renderFileList();
+}
+
 // 音声ファイル一覧を読み込み
 async function loadAudioFiles() {
     try {
@@ -139,6 +214,7 @@ async function loadAudioFiles() {
                 // 投稿ステータスはget-audio-filesから取得した最新の値を使用
                 standfmPublished: file.standfmPublished,
                 voicyPublished: file.voicyPublished,
+                spotifyPublished: file.spotifyPublished,
                 // その他のメタデータ（title, publishDateなど）はローカルのmetadataから取得
                 title: localMeta.title || file.title || '',
                 publishDate: localMeta.publishDate || file.publishDate || ''
@@ -285,7 +361,7 @@ function renderFileList() {
 
     if (filterUnpublished.checked) {
         filteredFiles = filteredFiles.filter(file =>
-            !file.standfmPublished || !file.voicyPublished
+            !file.standfmPublished || !file.voicyPublished || !file.spotifyPublished
         );
     }
 
@@ -366,27 +442,38 @@ function createFileItem(file) {
 
 
 
-    const standfmButton = file.standfmPublished ?
-        `<button class="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/10 text-emerald-500 hover:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm border border-emerald-500/20 hover:border-red-500/20 transition-all cursor-pointer group" onclick="resetPublishStatus('${file.basename}', 'standfm')" title="stand.fm投稿済みをリセット">
+    const standfmButton = platformSettings.standfm ? (file.standfmPublished ?
+        `<button class="w-[130px] flex justify-center px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/10 text-emerald-500 hover:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm border border-emerald-500/20 hover:border-red-500/20 transition-all cursor-pointer group" onclick="resetPublishStatus('${file.basename}', 'standfm')" title="stand.fm投稿済みをリセット">
             <i data-lucide="check-circle-2" class="w-3.5 h-3.5 group-hover:hidden"></i>
             <i data-lucide="x-circle" class="w-3.5 h-3.5 hidden group-hover:block"></i>
             stand.fm済
         </button>` :
-        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-green-400 hover:border-green-500/30 hover:bg-green-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToStandfm('${file.basename}', '${file.publishDate || ''}')" title="stand.fmに投稿">
+        `<button class="w-[130px] flex justify-center px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-green-400 hover:border-green-500/30 hover:bg-green-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToStandfm('${file.basename}', '${file.publishDate || ''}')" title="stand.fmに投稿">
             <i data-lucide="radio" class="w-3.5 h-3.5 text-slate-500 group-hover:text-green-500 transition-colors"></i>
             stand.fm投稿
-        </button>`;
+        </button>`) : '';
 
-    const voicyButton = file.voicyPublished ?
-        `<button class="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/10 text-emerald-500 hover:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm border border-emerald-500/20 hover:border-red-500/20 transition-all cursor-pointer group" onclick="resetPublishStatus('${file.basename}', 'voicy')" title="Voicy投稿済みをリセット">
+    const voicyButton = platformSettings.voicy ? (file.voicyPublished ?
+        `<button class="w-[130px] flex justify-center px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/10 text-emerald-500 hover:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm border border-emerald-500/20 hover:border-red-500/20 transition-all cursor-pointer group" onclick="resetPublishStatus('${file.basename}', 'voicy')" title="Voicy投稿済みをリセット">
             <i data-lucide="check-circle-2" class="w-3.5 h-3.5 group-hover:hidden"></i>
             <i data-lucide="x-circle" class="w-3.5 h-3.5 hidden group-hover:block"></i>
             Voicy済
         </button>` :
-        `<button class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-500/30 hover:bg-purple-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToVoicy('${file.basename}')" title="Voicyに投稿">
+        `<button class="w-[130px] flex justify-center px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-500/30 hover:bg-purple-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToVoicy('${file.basename}', '${file.publishDate || ''}')" title="Voicyに投稿">
             <i data-lucide="mic" class="w-3.5 h-3.5 text-slate-500 group-hover:text-purple-500 transition-colors"></i>
             Voicy投稿
-        </button>`;
+        </button>`) : '';
+
+    const spotifyButton = platformSettings.spotify ? (file.spotifyPublished ?
+        `<button class="w-[130px] flex justify-center px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/10 text-emerald-500 hover:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm border border-emerald-500/20 hover:border-red-500/20 transition-all cursor-pointer group" onclick="resetPublishStatus('${file.basename}', 'spotify')" title="Spotify投稿済みをリセット">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 group-hover:hidden"></i>
+            <i data-lucide="x-circle" class="w-3.5 h-3.5 hidden group-hover:block"></i>
+            Spotify済
+        </button>` :
+        `<button class="w-[130px] flex justify-center px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 group" onclick="publishToSpotify('${file.basename}', '${file.publishDate || ''}')" title="Spotifyに投稿">
+            <i data-lucide="music" class="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-500 transition-colors"></i>
+            Spotify投稿
+        </button>`) : ''
 
 
 
@@ -396,7 +483,7 @@ function createFileItem(file) {
             <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-slate-800 to-transparent rounded-bl-full -mr-8 -mt-8 pointer-events-none opacity-20"></div>
 
             <!-- 1行目: タイトルと編集ボタン -->
-            <div class="flex items-center justify-between mb-4 relative z-10">
+            <div class="flex items-center justify-between mb-1 relative z-10">
                 <div class="flex-1 min-w-0 pr-4">
                     <div class="flex items-center gap-2 mb-1.5">
                          <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">
@@ -419,11 +506,15 @@ function createFileItem(file) {
             </div>
 
             <!-- 2行目: ステータスボタン -->
-            <div class="flex flex-wrap gap-3 items-center relative z-10">
-                ${transcriptButton}
-                <div class="h-6 w-px bg-slate-800"></div>
-                ${standfmButton}
-                ${voicyButton}
+            <div class="flex flex-wrap gap-3 items-center justify-between relative z-10">
+                <div class="flex items-center gap-3">
+                    ${transcriptButton}
+                </div>
+                <div class="flex items-center gap-3">
+                    ${standfmButton}
+                    ${voicyButton}
+                    ${spotifyButton}
+                </div>
             </div>
         </div>
     `;
@@ -686,8 +777,30 @@ function editFile(basename) {
     if (file) {
         document.getElementById('editTitle').value = file.title || '';
         document.getElementById('editDate').value = file.publishDate || '';
-        document.getElementById('editStandfm').checked = file.standfmPublished || false;
-        document.getElementById('editVoicy').checked = file.voicyPublished || false;
+
+        // プラットフォーム設定に基づいてチェックボックスを表示/非表示
+        const standfmLabel = document.getElementById('editStandfm')?.closest('label');
+        const voicyLabel = document.getElementById('editVoicy')?.closest('label');
+        const spotifyLabel = document.getElementById('editSpotify')?.closest('label');
+
+        if (standfmLabel) {
+            standfmLabel.style.display = platformSettings.standfm ? 'flex' : 'none';
+            if (platformSettings.standfm) {
+                document.getElementById('editStandfm').checked = file.standfmPublished || false;
+            }
+        }
+        if (voicyLabel) {
+            voicyLabel.style.display = platformSettings.voicy ? 'flex' : 'none';
+            if (platformSettings.voicy) {
+                document.getElementById('editVoicy').checked = file.voicyPublished || false;
+            }
+        }
+        if (spotifyLabel) {
+            spotifyLabel.style.display = platformSettings.spotify ? 'flex' : 'none';
+            if (platformSettings.spotify) {
+                document.getElementById('editSpotify').checked = file.spotifyPublished || false;
+            }
+        }
 
         editModal.classList.remove('opacity-0', 'pointer-events-none');
     }
@@ -708,8 +821,9 @@ async function saveFileMetadata() {
         const fileMetadata = {
             title: formData.get('title'),
             publishDate: formData.get('publishDate'),
-            standfmPublished: formData.has('standfmPublished'),
-            voicyPublished: formData.has('voicyPublished')
+            standfmPublished: platformSettings.standfm && formData.has('standfmPublished'),
+            voicyPublished: platformSettings.voicy && formData.has('voicyPublished'),
+            spotifyPublished: platformSettings.spotify && formData.has('spotifyPublished')
         };
 
         metadata[currentEditingFile] = fileMetadata;
@@ -736,7 +850,8 @@ let currentVoicyTargetFile = null;
 
 // Voicy投稿ボタンクリック時の処理（モーダルを開く）
 // Voicy投稿ボタンクリック時の処理（モーダルを開く）
-function publishToVoicy(basename) {
+function publishToVoicy(basename, initialDate) {
+    console.log('Voicy投稿関数が呼び出されました:', basename, 'InitialDate:', initialDate)
     currentVoicyTargetFile = basename;
 
     // UIを更新
@@ -796,24 +911,45 @@ function publishToVoicy(basename) {
             document.getElementById('voicyPublishTime').value = '06:10';
         }
 
-        // 予約投稿日 (ファイル名から自動設定、または明日)
+        // 予約投稿日
+        // 優先順位:
+        // 1. 引数で渡された日時 (initialDate) - カードに表示されている日時
+        // 2. ファイル名から解析された日時
+        // 3. 明日
         const dateInput = document.getElementById('voicyPublishDate');
         if (dateInput) {
             let dateStr = '';
-            // ファイル名から解析
-            const dateMatch = basename.match(/^(\d{4})(\d{2})(\d{2})/);
-            if (dateMatch) {
-                const year = dateMatch[1];
-                const month = dateMatch[2];
-                const day = dateMatch[3];
-                dateStr = `${year}-${month}-${day}`;
-            } else {
-                // なければ明日
-                const d = new Date();
-                d.setDate(d.getDate() + 1);
+
+            if (initialDate && !isNaN(new Date(initialDate).getTime())) {
+                // initialDateが有効な場合
+                const d = new Date(initialDate);
                 const year = d.getFullYear();
                 const month = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
+                dateStr = `${year}-${month}-${day}`;
+            } else {
+                // フォールバック: ファイル名または明日
+                let targetDate = new Date();
+                targetDate.setDate(targetDate.getDate() + 1);
+
+                try {
+                    const dateMatch = basename.match(/^(\d{4})(\d{2})(\d{2})/);
+                    if (dateMatch) {
+                        const year = parseInt(dateMatch[1]);
+                        const month = parseInt(dateMatch[2]) - 1;
+                        const day = parseInt(dateMatch[3]);
+                        const fileDate = new Date(year, month, day);
+                        if (!isNaN(fileDate.getTime())) {
+                            targetDate = fileDate;
+                        }
+                    }
+                } catch (e) {
+                    console.error('日付解析エラー:', e);
+                }
+
+                const year = targetDate.getFullYear();
+                const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+                const day = String(targetDate.getDate()).padStart(2, '0');
                 dateStr = `${year}-${month}-${day}`;
             }
             dateInput.value = dateStr;
@@ -837,17 +973,6 @@ function publishToVoicy(basename) {
         const newConfirmBtn = confirmBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', () => executeVoicyPublish());
-
-        // 放送タイトルのデフォルト保存ボタン
-        const saveBroadcastTitleBtn = document.getElementById('saveVoicyBroadcastTitleDefaultBtn');
-        const newSaveBroadcastTitleBtn = saveBroadcastTitleBtn.cloneNode(true);
-        saveBroadcastTitleBtn.parentNode.replaceChild(newSaveBroadcastTitleBtn, saveBroadcastTitleBtn);
-
-        newSaveBroadcastTitleBtn.addEventListener('click', () => {
-            const broadcastTitle = document.getElementById('voicyBroadcastTitle').value;
-            localStorage.setItem('voicy_default_broadcast_title', broadcastTitle);
-            showToast('放送タイトルをデフォルトとして保存しました');
-        });
 
         // チャプタータイトルのデフォルト保存ボタン
         const saveTitleBtn = document.getElementById('saveVoicyTitleDefaultBtn');
@@ -906,6 +1031,302 @@ function publishToVoicy(basename) {
 
     } else {
         console.error('Voicy投稿モーダルが見つかりません');
+    }
+}
+
+// Spotify投稿モーダル関連の変数
+let currentSpotifyTargetFile = null
+
+// Spotifyに投稿（グローバル関数として定義）
+window.publishToSpotify = async function publishToSpotify(basename, initialDate) {
+    console.log('Spotify投稿関数が呼び出されました:', basename, 'InitialDate:', initialDate)
+    currentSpotifyTargetFile = basename
+
+    // UIを更新
+    const modal = document.getElementById('spotifyPublishModal')
+    try {
+        if (modal) {
+            let dateStr = ''
+
+            // 優先順位:
+            // 1. 引数で渡された日時 (initialDate) - カードに表示されている日時
+            // 2. ファイル名から解析された日時
+            // 3. 明日
+
+            if (initialDate && !isNaN(new Date(initialDate).getTime())) {
+                // initialDateが有効な場合
+                const d = new Date(initialDate)
+                const year = d.getFullYear()
+                const month = String(d.getMonth() + 1).padStart(2, '0')
+                const day = String(d.getDate()).padStart(2, '0')
+                dateStr = `${year}-${month}-${day}`
+            } else {
+                // フォールバック: ファイル名または明日
+                let targetDate = new Date()
+                targetDate.setDate(targetDate.getDate() + 1)
+
+                try {
+                    const dateMatch = basename.match(/^(\d{4})(\d{2})(\d{2})/)
+                    if (dateMatch) {
+                        const year = parseInt(dateMatch[1])
+                        const month = parseInt(dateMatch[2]) - 1
+                        const day = parseInt(dateMatch[3])
+                        const fileDate = new Date(year, month, day)
+                        if (!isNaN(fileDate.getTime())) {
+                            targetDate = fileDate
+                        }
+                    }
+                } catch (e) {
+                    console.error('日付解析エラー:', e)
+                }
+
+                const year = targetDate.getFullYear()
+                const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+                const day = String(targetDate.getDate()).padStart(2, '0')
+                dateStr = `${year}-${month}-${day}`
+            }
+
+            const dateInput = document.getElementById('spotifyPublishDate')
+            if (dateInput) {
+                dateInput.value = dateStr
+            }
+
+            // タイトルの設定
+            const titleInput = document.getElementById('spotifyBroadcastTitle')
+            if (titleInput) {
+                // メタデータからタイトルを取得
+                const currentMetadata = metadata[basename] || {}
+                titleInput.value = currentMetadata.title || ''
+            }
+
+            // 時間のデフォルト値を読み込み
+            const savedTime = await ipcRenderer.invoke('get-config', 'spotifyDefaultTime')
+            const timeInput = document.getElementById('spotifyPublishTime')
+            if (timeInput) {
+                timeInput.value = savedTime || '06:00'
+            }
+
+            // 時間保存ボタンのイベントリスナー
+            const saveTimeBtn = document.getElementById('saveSpotifyTimeDefaultBtn')
+            if (saveTimeBtn) {
+                const newSaveTimeBtn = saveTimeBtn.cloneNode(true)
+                saveTimeBtn.parentNode.replaceChild(newSaveTimeBtn, saveTimeBtn)
+
+                newSaveTimeBtn.addEventListener('click', () => {
+                    const currentTime = document.getElementById('spotifyPublishTime').value
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultTime', currentTime)
+
+                    // ボタンの見た目を更新
+                    const originalHtml = newSaveTimeBtn.innerHTML
+                    newSaveTimeBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>保存しました'
+                    lucide.createIcons()
+
+                    setTimeout(() => {
+                        newSaveTimeBtn.innerHTML = originalHtml
+                        lucide.createIcons()
+                    }, 2000)
+                })
+            }
+
+            // 説明文のデフォルト値を読み込み
+            const savedDescription = await ipcRenderer.invoke('get-config', 'spotifyDefaultDescription')
+            const descriptionInput = document.getElementById('spotifyDescription')
+            if (descriptionInput) {
+                const defaultDesc = ''
+                descriptionInput.value = savedDescription !== null && savedDescription !== undefined ? savedDescription : defaultDesc
+            }
+
+            // 説明文保存ボタンのイベントリスナー
+            const saveDescBtn = document.getElementById('saveSpotifyDescriptionDefaultBtn')
+            if (saveDescBtn) {
+                const newSaveDescBtn = saveDescBtn.cloneNode(true)
+                saveDescBtn.parentNode.replaceChild(newSaveDescBtn, saveDescBtn)
+
+                newSaveDescBtn.addEventListener('click', () => {
+                    const currentDesc = document.getElementById('spotifyDescription').value
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultDescription', currentDesc)
+
+                    // ボタンの見た目を更新
+                    const originalHtml = newSaveDescBtn.innerHTML
+                    newSaveDescBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>保存しました'
+                    lucide.createIcons()
+
+                    setTimeout(() => {
+                        newSaveDescBtn.innerHTML = originalHtml
+                        lucide.createIcons()
+                    }, 2000)
+                })
+            }
+
+            // 放送画像設定の初期化
+            const savedImage = await ipcRenderer.invoke('get-config', 'spotifyDefaultImage')
+            const imageStatus = document.getElementById('spotifyImageStatus')
+            const imagePreview = document.getElementById('spotifyImagePreview')
+            const imageInfo = document.getElementById('spotifyImageInfo')
+            const imageName = document.getElementById('spotifyImageName')
+            const clearImageBtn = document.getElementById('clearSpotifyImageBtn')
+            const imageInput = document.getElementById('spotifyImageInput')
+            const selectImageBtn = document.getElementById('selectSpotifyImageBtn')
+
+            const updateImageUI = (path) => {
+                console.log('Updating Image UI with path:', path)
+                if (path) {
+                    // ファイルが存在するか確認（非同期だがUI更新は先に行う）
+                    ipcRenderer.invoke('check-file-exists', path).then(exists => {
+                        if (!exists) {
+                            console.warn('Saved image file not found:', path)
+                        } else {
+                            console.log('Saved image file confirmed to exist')
+                        }
+                    })
+
+                    if (imageStatus) imageStatus.classList.add('hidden')
+
+                    if (imagePreview) {
+                        // file:// プロトコルを明示的に付与
+                        const srcPath = path.startsWith('file://') ? path : `file://${path}`
+                        imagePreview.src = srcPath
+                        imagePreview.classList.remove('hidden')
+                    }
+
+                    if (imageInfo) {
+                        imageInfo.classList.remove('hidden')
+                        imageInfo.classList.add('flex')
+                    }
+
+                    if (imageName) {
+                        const filename = path.split(/[/\\]/).pop()
+                        imageName.textContent = filename || path
+                        imageName.classList.remove('hidden')
+                    }
+
+                    if (clearImageBtn) clearImageBtn.classList.remove('hidden')
+                } else {
+                    if (imageStatus) {
+                        imageStatus.classList.remove('hidden')
+                        imageStatus.textContent = '未設定'
+                    }
+
+                    if (imagePreview) {
+                        imagePreview.classList.add('hidden')
+                        imagePreview.src = ''
+                    }
+
+                    if (imageInfo) {
+                        imageInfo.classList.add('hidden')
+                        imageInfo.classList.remove('flex')
+                    }
+
+                    if (imageName) {
+                        imageName.classList.add('hidden')
+                        imageName.textContent = ''
+                    }
+
+                    if (clearImageBtn) clearImageBtn.classList.add('hidden')
+                }
+            }
+
+            // 保存された画像パスを設定
+            updateImageUI(savedImage || null)
+
+            // 画像選択ボタンと画像入力の処理
+            if (selectImageBtn && imageInput) {
+                // Inputを再生成（リスナー除去のため）
+                const newImageInput = imageInput.cloneNode(true)
+                imageInput.parentNode.replaceChild(newImageInput, imageInput)
+
+                // Buttonを再生成（リスナー除去のため）
+                const newSelectImageBtn = selectImageBtn.cloneNode(true)
+                selectImageBtn.parentNode.replaceChild(newSelectImageBtn, selectImageBtn)
+
+                // ボタンが新しいInputをクリックするように設定
+                newSelectImageBtn.addEventListener('click', async () => {
+                    console.log('Select image button clicked')
+                    try {
+                        const selectedPath = await ipcRenderer.invoke('select-image-file')
+                        console.log('Image selected via dialog:', selectedPath)
+
+                        if (!selectedPath) return
+
+                        const result = await ipcRenderer.invoke('save-broadcast-image', selectedPath)
+
+                        if (result.success) {
+                            console.log('Image saved internally:', result.path)
+                            ipcRenderer.invoke('set-config', 'spotifyDefaultImage', result.path)
+                            updateImageUI(result.path)
+                        } else {
+                            console.error('Failed to save image internally:', result.error)
+                            alert('画像の保存に失敗しました: ' + result.error)
+                        }
+                    } catch (err) {
+                        console.error('Error selecting/saving image:', err)
+                        alert('画像の保存中にエラーが発生しました')
+                    }
+                })
+
+                // 新しいInputにchangeイベントを設定
+                newImageInput.addEventListener('change', async (e) => {
+                    console.log('Image input changed', e.target.files)
+                    if (e.target.files && e.target.files.length > 0) {
+                        const file = e.target.files[0]
+                        const originalPath = file.path || file.webkitRelativePath || null
+
+                        console.log('Image selected:', originalPath)
+
+                        try {
+                            // メインプロセス経由でアプリ内部領域に保存
+                            const result = await ipcRenderer.invoke('save-broadcast-image', originalPath)
+
+                            if (result.success) {
+                                console.log('Image saved internally:', result.path)
+                                ipcRenderer.invoke('set-config', 'spotifyDefaultImage', result.path)
+                                updateImageUI(result.path)
+                            } else {
+                                console.error('Failed to save image internally:', result.error)
+                                alert('画像の保存に失敗しました: ' + result.error)
+                            }
+                        } catch (err) {
+                            console.error('IPC error during image save:', err)
+                            alert('画像の保存中にエラーが発生しました')
+                        }
+                    }
+                })
+            }
+
+            // 画像クリアボタンの処理
+            if (clearImageBtn) {
+                const newClearImageBtn = clearImageBtn.cloneNode(true)
+                clearImageBtn.parentNode.replaceChild(newClearImageBtn, clearImageBtn)
+                newClearImageBtn.addEventListener('click', () => {
+                    ipcRenderer.invoke('set-config', 'spotifyDefaultImage', null)
+                    updateImageUI(null)
+                    // 画像入力もリセット（再取得してリセット）
+                    const currentInput = document.getElementById('spotifyImageInput')
+                    if (currentInput) currentInput.value = ''
+                })
+            }
+
+            // 投稿ボタンのイベントリスナー
+            const confirmBtn = document.getElementById('confirmSpotifyPublishBtn')
+            if (confirmBtn) {
+                const newConfirmBtn = confirmBtn.cloneNode(true)
+                confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn)
+
+                newConfirmBtn.addEventListener('click', () => {
+                    executeSpotifyPublish()
+                })
+            }
+
+            // モーダルを表示
+            modal.classList.remove('opacity-0', 'pointer-events-none')
+            modal.setAttribute('aria-hidden', 'false')
+            lucide.createIcons()
+        } else {
+            console.error('Spotify投稿モーダルが見つかりません')
+        }
+    } catch (error) {
+        console.error('Spotify投稿モーダル表示中にエラーが発生しました:', error)
+        alert('エラーが発生しました: ' + error.message)
     }
 }
 
@@ -1470,6 +1891,75 @@ window.closeStandfmPublishModal = function () {
     }
 }
 
+// Spotify投稿処理の実行
+async function executeSpotifyPublish() {
+    if (!currentSpotifyTargetFile) return
+
+    try {
+        const description = document.getElementById('spotifyDescription').value
+        const imagePath = await ipcRenderer.invoke('get-config', 'spotifyDefaultImage') || ''
+        const publishDate = document.getElementById('spotifyPublishDate') ? document.getElementById('spotifyPublishDate').value : ''
+        const publishTime = document.getElementById('spotifyPublishTime') ? document.getElementById('spotifyPublishTime').value : ''
+        const broadcastTitle = document.getElementById('spotifyBroadcastTitle') ? document.getElementById('spotifyBroadcastTitle').value : ''
+
+        const button = document.getElementById('confirmSpotifyPublishBtn')
+        const originalHTML = button.innerHTML
+
+        console.log('ボタンを無効化します')
+
+        // ボタンを無効化してローディング状態にする
+        button.disabled = true
+        button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>投稿中...'
+        lucide.createIcons()
+
+        console.log(`IPCでSpotify投稿を開始します。Title: ${broadcastTitle}, Image: ${imagePath}, Date: ${publishDate}, Time: ${publishTime}`)
+
+        const result = await ipcRenderer.invoke('publish-to-spotify',
+            currentSpotifyTargetFile,
+            broadcastTitle,
+            description,
+            imagePath,
+            publishDate,
+            publishTime
+        )
+        console.log('Spotify投稿結果:', result)
+
+        if (result.success) {
+            console.log(result.message)
+            closeSpotifyPublishModal()
+            // Spotify投稿済みステータスを更新
+            await loadAudioFiles()
+            showToast('Spotifyへの投稿が完了しました！')
+        } else {
+            showToast(`Spotify投稿エラー: ${result.message}`, 'error')
+        }
+
+        button.innerHTML = originalHTML
+        button.disabled = false
+        lucide.createIcons()
+
+    } catch (error) {
+        console.error('Spotify投稿エラー:', error)
+        showToast('Spotify投稿の実行に失敗しました: ' + error.message, 'error')
+
+        const button = document.getElementById('confirmSpotifyPublishBtn')
+        if (button) {
+            button.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>投稿する'
+            button.disabled = false
+            lucide.createIcons()
+        }
+    }
+}
+
+// Spotify投稿モーダルを閉じる
+window.closeSpotifyPublishModal = function () {
+    const modal = document.getElementById('spotifyPublishModal')
+    if (modal) {
+        modal.classList.add('opacity-0', 'pointer-events-none')
+        currentSpotifyTargetFile = null
+    }
+}
+
 
 
 // 外部URLを開く
@@ -1488,7 +1978,8 @@ async function openExternalUrl(url) {
 async function resetPublishStatus(basename, platform) {
     const platformNames = {
         'voicy': 'Voicy',
-        'standfm': 'stand.fm'
+        'standfm': 'stand.fm',
+        'spotify': 'Spotify'
     };
     const platformName = platformNames[platform] || platform;
 
@@ -1512,6 +2003,61 @@ async function resetPublishStatus(basename, platform) {
     }
 }
 
+// プラットフォーム設定モーダルを開く
+window.openPlatformSettingsModal = function() {
+    const modal = document.getElementById('platformSettingsModal');
+    if (!modal) return;
+
+    // 現在の設定を反映
+    document.getElementById('platformStandfmEnabled').checked = platformSettings.standfm;
+    document.getElementById('platformVoicyEnabled').checked = platformSettings.voicy;
+    document.getElementById('platformSpotifyEnabled').checked = platformSettings.spotify;
+
+    // イベントリスナーを設定
+    const standfmCheckbox = document.getElementById('platformStandfmEnabled');
+    const voicyCheckbox = document.getElementById('platformVoicyEnabled');
+    const spotifyCheckbox = document.getElementById('platformSpotifyEnabled');
+
+    // 既存のリスナーを削除してから新しいリスナーを追加
+    const newStandfmCheckbox = standfmCheckbox.cloneNode(true);
+    standfmCheckbox.parentNode.replaceChild(newStandfmCheckbox, standfmCheckbox);
+    newStandfmCheckbox.checked = platformSettings.standfm;
+    newStandfmCheckbox.addEventListener('change', async (e) => {
+        platformSettings.standfm = e.target.checked;
+        await savePlatformSettings();
+        updatePlatformVisibility();
+    });
+
+    const newVoicyCheckbox = voicyCheckbox.cloneNode(true);
+    voicyCheckbox.parentNode.replaceChild(newVoicyCheckbox, voicyCheckbox);
+    newVoicyCheckbox.checked = platformSettings.voicy;
+    newVoicyCheckbox.addEventListener('change', async (e) => {
+        platformSettings.voicy = e.target.checked;
+        await savePlatformSettings();
+        updatePlatformVisibility();
+    });
+
+    const newSpotifyCheckbox = spotifyCheckbox.cloneNode(true);
+    spotifyCheckbox.parentNode.replaceChild(newSpotifyCheckbox, spotifyCheckbox);
+    newSpotifyCheckbox.checked = platformSettings.spotify;
+    newSpotifyCheckbox.addEventListener('change', async (e) => {
+        platformSettings.spotify = e.target.checked;
+        await savePlatformSettings();
+        updatePlatformVisibility();
+    });
+
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    lucide.createIcons();
+}
+
+// プラットフォーム設定モーダルを閉じる
+window.closePlatformSettingsModal = function() {
+    const modal = document.getElementById('platformSettingsModal');
+    if (modal) {
+        modal.classList.add('opacity-0', 'pointer-events-none');
+    }
+}
+
 // グローバルスコープに公開
 // グローバルスコープに公開
 window.resetPublishStatus = resetPublishStatus;
@@ -1520,3 +2066,5 @@ window.transcribeAudio = transcribeAudio;
 window.copyTranscriptionPrompt = copyTranscriptionPrompt;
 window.downloadTranscription = downloadTranscription;
 window.publishToVoicy = publishToVoicy;
+window.publishToSpotify = publishToSpotify;
+window.closeSpotifyPublishModal = closeSpotifyPublishModal

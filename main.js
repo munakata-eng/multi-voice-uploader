@@ -5,6 +5,7 @@ const { spawn, execSync } = require('child_process');
 const os = require('os');
 const { registerVoicyPublishHandler } = require('./main/voicy-publish')
 const { registerStandfmPublishHandler } = require('./main/standfm-publish')
+const { registerSpotifyPublishHandler } = require('./main/spotify-publish')
 
 // 起動直後に main.js が実行されているかを切り分けるためのデバッグ（必要時のみ有効）
 const bootLogPath = '/tmp/voice-uploader-boot.log'
@@ -315,7 +316,9 @@ ipcMain.handle('get-audio-files', async () => {
         publishDate: '',
         standfmPublished: itemMetadata.standfmPublished || false,
         voicyPublished: itemMetadata.voicyPublished || false,
-        voicyPublishedDate: itemMetadata.voicyPublishedDate || null
+        voicyPublishedDate: itemMetadata.voicyPublishedDate || null,
+        spotifyPublished: itemMetadata.spotifyPublished || false,
+        spotifyPublishedDate: itemMetadata.spotifyPublishedDate || null
       });
     }
 
@@ -516,6 +519,9 @@ ipcMain.handle('reset-publish-status', async (event, basename, platform) => {
     } else if (platform === 'standfm') {
       metadata[basename].standfmPublished = false;
       delete metadata[basename].standfmPublishedDate;
+    } else if (platform === 'spotify') {
+      metadata[basename].spotifyPublished = false
+      delete metadata[basename].spotifyPublishedDate
     }
 
     await fs.writeJson(metadataPath, metadata, { spaces: 2 });
@@ -1338,4 +1344,24 @@ registerStandfmPublishHandler({
   waitForStandfmImageFileInput,
   waitForStandfmImagePreview,
   getFileInputsSnapshot
+})
+
+registerSpotifyPublishHandler({
+  ipcMain,
+  fs,
+  path,
+  getPageInstance,
+  getAppPaths
+})
+
+// アプリバージョン取得
+ipcMain.handle('get-app-version', async () => {
+  try {
+    const packageJsonPath = path.join(__dirname, 'package.json')
+    const packageJson = await fs.readJson(packageJsonPath)
+    return packageJson.version || '1.0.0'
+  } catch (error) {
+    console.error('Failed to get app version:', error)
+    return '1.0.0'
+  }
 })
