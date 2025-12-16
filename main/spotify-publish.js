@@ -918,92 +918,217 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
               const day = parseInt(dateParts[2])
               console.log(`[Spotify] 日付を設定: ${publishDate} (年: ${year}, 月: ${month}, 日: ${day})`)
 
-              // 日付ボタンを探して直接値を設定
+              // 日付ボタンをクリックしてカレンダーピッカーを開く
               console.log('[Spotify] 日付ボタンを探しています...')
-              const dateSet = await page.evaluate((targetDate, targetYear, targetMonth, targetDay) => {
-                // YYYY-MM-DD形式をYYYY/MM/DD形式に変換
-                const formattedDate = `${targetYear}/${String(targetMonth).padStart(2, '0')}/${String(targetDay).padStart(2, '0')}`
 
-                // ラベルに「日付」が含まれるform-groupを探す
+              // 日付ボタンを探す
+              const dateButton = await page.evaluateHandle(() => {
                 const labels = Array.from(document.querySelectorAll('label'))
                 for (const label of labels) {
                   const labelText = label.textContent || label.innerText || ''
                   if (labelText.includes('日付')) {
-                    // ラベルの親要素からボタンを探す
                     const formGroup = label.closest('[data-encore-id="formGroup"]')
                     if (formGroup) {
                       const button = formGroup.querySelector('button[type="button"]')
                       if (button) {
-                        const span = button.querySelector('span')
-                        if (span) {
-                          // spanのテキストを変更
-                          span.textContent = formattedDate
-                          span.innerText = formattedDate
-
-                          // ボタンにdata属性を設定（もしあれば）
-                          if (!button.dataset.value) {
-                            button.dataset.value = targetDate
-                          }
-
-                          // 複数のイベントを発火
-                          const events = ['click', 'change', 'input']
-                          events.forEach(eventType => {
-                            const event = new Event(eventType, { bubbles: true, cancelable: true })
-                            button.dispatchEvent(event)
-                          })
-
-                          // React用の合成イベントも発火
-                          const syntheticEvent = new Event('change', { bubbles: true, cancelable: true })
-                          Object.defineProperty(syntheticEvent, 'target', { value: button, enumerable: true })
-                          button.dispatchEvent(syntheticEvent)
-
-                          // 親要素のフォームにもイベントを発火
-                          const form = button.closest('form')
-                          if (form) {
-                            const formEvent = new Event('change', { bubbles: true, cancelable: true })
-                            form.dispatchEvent(formEvent)
-                          }
-
-                          console.log(`日付ボタンのspanを更新しました: ${formattedDate}`)
-                          return true
-                        }
+                        return button
                       }
                     }
                   }
                 }
+                return null
+              })
 
-                // フォールバック: input[type="date"]を探す
-                const dateInput = document.querySelector('input[type="date"]')
-                if (dateInput) {
-                  dateInput.value = targetDate
-                  const events = ['input', 'change', 'blur']
-                  events.forEach(eventType => {
-                    const event = new Event(eventType, { bubbles: true, cancelable: true })
-                    dateInput.dispatchEvent(event)
-                  })
-                  console.log(`日付入力欄に値を設定しました: ${targetDate}`)
-                  return true
-                }
+              if (dateButton && dateButton.asElement) {
+                const buttonElement = dateButton.asElement()
+                if (buttonElement) {
+                  console.log('[Spotify] 日付ボタンを見つけました。クリックしてカレンダーピッカーを開きます...')
+                  await buttonElement.click()
 
-                // フォールバック: hidden inputを探す
-                const hiddenInputs = Array.from(document.querySelectorAll('input[type="hidden"]'))
-                for (const input of hiddenInputs) {
-                  const name = input.name || input.id || ''
-                  if (name.includes('date') || name.includes('Date')) {
-                    input.value = targetDate
-                    const changeEvent = new Event('change', { bubbles: true, cancelable: true })
-                    input.dispatchEvent(changeEvent)
-                    console.log(`hidden inputに値を設定しました: ${name} = ${targetDate}`)
-                    return true
+                  // カレンダーピッカーが表示されるまで待機
+                  await new Promise(resolve => setTimeout(resolve, 1000))
+
+                  try {
+                    // カレンダーピッカーが表示されているか確認
+                    await page.waitForSelector('.DayPicker', { timeout: 5000 })
+                    console.log('[Spotify] カレンダーピッカーが表示されました')
+
+                    // 目的の日付を選択
+                    const dateSelected = await page.evaluate((targetYear, targetMonth, targetDay) => {
+                      // 目的の日付のaria-labelを構築（例: "火曜日, 2025年12月16日"）
+                      const targetAriaLabel = `${targetYear}年${targetMonth}月${targetDay}日`
+
+                      // CalendarDay要素を探す
+                      const calendarDays = Array.from(document.querySelectorAll('.CalendarDay'))
+                      for (const day of calendarDays) {
+                        const ariaLabel = day.getAttribute('aria-label') || ''
+                        // aria-labelに目的の日付が含まれているか確認
+                        if (ariaLabel.includes(targetAriaLabel)) {
+                          // クリック可能か確認
+                          const isDisabled = day.getAttribute('aria-disabled') === 'true'
+                          if (!isDisabled) {
+                            day.click()
+                            console.log(`日付をクリックしました: ${ariaLabel}`)
+                            return true
+                          }
+                        }
+                      }
+
+                      // フォールバック: テキスト内容で探す
+                      for (const day of calendarDays) {
+                        const dayText = day.textContent.trim()
+                        if (dayText === String(targetDay)) {
+                          // 親要素のCalendarMonthから年月を確認
+                          const calendarMonth = day.closest('.CalendarMonth')
+                          if (calendarMonth) {
+                            const caption = calendarMonth.querySelector('.CalendarMonth_caption')
+                            if (caption) {
+                              const captionText = caption.textContent || ''
+                              if (captionText.includes(`${targetYear}年${targetMonth}月`)) {
+                                const isDisabled = day.getAttribute('aria-disabled') === 'true'
+                                if (!isDisabled) {
+                                  day.click()
+                                  console.log(`日付をクリックしました（フォールバック）: ${dayText}`)
+                                  return true
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+
+                      return false
+                    }, year, month, day)
+
+                    if (dateSelected) {
+                      console.log('[Spotify] カレンダー上で日付を選択しました')
+                      // カレンダーピッカーが閉じるまで少し待機
+                      await new Promise(resolve => setTimeout(resolve, 1000))
+                    } else {
+                      console.log('[Spotify] カレンダー上で目的の日付が見つかりませんでした。月を移動する必要があるかもしれません')
+
+                      // 月を移動して目的の日付を探す
+                      console.log('[Spotify] 目的の月まで移動します...')
+
+                      // 最大12回まで月を移動して目的の月を探す
+                      let monthFound = false
+                      for (let attempt = 0; attempt < 12; attempt++) {
+                        // 現在表示されている月を確認
+                        const currentDisplayedMonth = await page.evaluate((targetYear, targetMonth) => {
+                          const visibleMonths = Array.from(document.querySelectorAll('.CalendarMonth[data-visible="true"]'))
+                          for (const monthEl of visibleMonths) {
+                            const caption = monthEl.querySelector('.CalendarMonth_caption')
+                            if (caption) {
+                              const captionText = caption.textContent || ''
+                              if (captionText.includes(`${targetYear}年${targetMonth}月`)) {
+                                return true
+                              }
+                            }
+                          }
+                          return false
+                        }, year, month)
+
+                        if (currentDisplayedMonth) {
+                          monthFound = true
+                          console.log('[Spotify] 目的の月が見つかりました')
+                          break
+                        }
+
+                        // 目的の月が表示されていない場合、月を移動
+                        const monthMoved = await page.evaluate((targetYear, targetMonth) => {
+                          // 現在表示されている月を取得
+                          const visibleMonths = Array.from(document.querySelectorAll('.CalendarMonth[data-visible="true"]'))
+                          let currentMonth = null
+                          let currentYear = null
+
+                          for (const monthEl of visibleMonths) {
+                            const caption = monthEl.querySelector('.CalendarMonth_caption')
+                            if (caption) {
+                              const captionText = caption.textContent || ''
+                              const match = captionText.match(/(\d{4})年(\d{1,2})月/)
+                              if (match) {
+                                currentYear = parseInt(match[1])
+                                currentMonth = parseInt(match[2])
+                                break
+                              }
+                            }
+                          }
+
+                          if (currentMonth === null || currentYear === null) {
+                            return false
+                          }
+
+                          // ナビゲーションボタンを探す
+                          const navButtons = Array.from(document.querySelectorAll('.DayPickerNavigation_button'))
+                          const rightButton = navButtons.find(btn => {
+                            const ariaLabel = btn.getAttribute('aria-label') || ''
+                            return ariaLabel.includes('next') || ariaLabel.includes('forward')
+                          })
+                          const leftButton = navButtons.find(btn => {
+                            const ariaLabel = btn.getAttribute('aria-label') || ''
+                            return ariaLabel.includes('previous') || ariaLabel.includes('backward')
+                          })
+
+                          // 目的の月まで移動する方向を決定
+                          let moveButton = null
+                          if (currentYear < targetYear || (currentYear === targetYear && currentMonth < targetMonth)) {
+                            moveButton = rightButton
+                          } else if (currentYear > targetYear || (currentYear === targetYear && currentMonth > targetMonth)) {
+                            moveButton = leftButton
+                          }
+
+                          if (moveButton) {
+                            moveButton.click()
+                            return true
+                          }
+
+                          return false
+                        }, year, month)
+
+                        if (!monthMoved) {
+                          console.log('[Spotify] 月の移動に失敗しました')
+                          break
+                        }
+
+                        // 月移動後に少し待機
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                      }
+
+                      if (monthFound) {
+                        // 目的の月が見つかったら、再度日付を探す
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                        const dateSelectedAfterNav = await page.evaluate((targetYear, targetMonth, targetDay) => {
+                          const targetAriaLabel = `${targetYear}年${targetMonth}月${targetDay}日`
+                          const calendarDays = Array.from(document.querySelectorAll('.CalendarDay'))
+                          for (const day of calendarDays) {
+                            const ariaLabel = day.getAttribute('aria-label') || ''
+                            if (ariaLabel.includes(targetAriaLabel)) {
+                              const isDisabled = day.getAttribute('aria-disabled') === 'true'
+                              if (!isDisabled) {
+                                day.click()
+                                return true
+                              }
+                            }
+                          }
+                          return false
+                        }, year, month, day)
+
+                        if (dateSelectedAfterNav) {
+                          console.log('[Spotify] 月を移動して日付を選択しました')
+                          await new Promise(resolve => setTimeout(resolve, 1000))
+                        } else {
+                          console.log('[Spotify] 月を移動しましたが、日付の選択に失敗しました')
+                        }
+                      } else {
+                        console.log('[Spotify] 目的の月が見つかりませんでした')
+                      }
+                    }
+                  } catch (calendarError) {
+                    console.log('[Spotify] カレンダーピッカーの処理でエラーが発生しました:', calendarError.message)
                   }
+                } else {
+                  console.log('[Spotify] 日付ボタンの要素が見つかりませんでした')
                 }
-
-                return false
-              }, publishDate, year, month, day)
-
-              if (dateSet) {
-                console.log('[Spotify] 日付を直接設定しました')
-                await new Promise(resolve => setTimeout(resolve, 500))
               } else {
                 console.log('[Spotify] 日付ボタンが見つかりませんでした')
               }
@@ -1131,92 +1256,217 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
               const day = parseInt(dateParts[2])
               console.log(`[Spotify] 日付を設定: ${publishDate} (年: ${year}, 月: ${month}, 日: ${day})`)
 
-              // 日付ボタンを探して直接値を設定
+              // 日付ボタンをクリックしてカレンダーピッカーを開く
               console.log('[Spotify] 日付ボタンを探しています...')
-              const dateSet = await page.evaluate((targetDate, targetYear, targetMonth, targetDay) => {
-                // YYYY-MM-DD形式をYYYY/MM/DD形式に変換
-                const formattedDate = `${targetYear}/${String(targetMonth).padStart(2, '0')}/${String(targetDay).padStart(2, '0')}`
 
-                // ラベルに「日付」が含まれるform-groupを探す
+              // 日付ボタンを探す
+              const dateButton = await page.evaluateHandle(() => {
                 const labels = Array.from(document.querySelectorAll('label'))
                 for (const label of labels) {
                   const labelText = label.textContent || label.innerText || ''
                   if (labelText.includes('日付')) {
-                    // ラベルの親要素からボタンを探す
                     const formGroup = label.closest('[data-encore-id="formGroup"]')
                     if (formGroup) {
                       const button = formGroup.querySelector('button[type="button"]')
                       if (button) {
-                        const span = button.querySelector('span')
-                        if (span) {
-                          // spanのテキストを変更
-                          span.textContent = formattedDate
-                          span.innerText = formattedDate
-
-                          // ボタンにdata属性を設定（もしあれば）
-                          if (!button.dataset.value) {
-                            button.dataset.value = targetDate
-                          }
-
-                          // 複数のイベントを発火
-                          const events = ['click', 'change', 'input']
-                          events.forEach(eventType => {
-                            const event = new Event(eventType, { bubbles: true, cancelable: true })
-                            button.dispatchEvent(event)
-                          })
-
-                          // React用の合成イベントも発火
-                          const syntheticEvent = new Event('change', { bubbles: true, cancelable: true })
-                          Object.defineProperty(syntheticEvent, 'target', { value: button, enumerable: true })
-                          button.dispatchEvent(syntheticEvent)
-
-                          // 親要素のフォームにもイベントを発火
-                          const form = button.closest('form')
-                          if (form) {
-                            const formEvent = new Event('change', { bubbles: true, cancelable: true })
-                            form.dispatchEvent(formEvent)
-                          }
-
-                          console.log(`日付ボタンのspanを更新しました: ${formattedDate}`)
-                          return true
-                        }
+                        return button
                       }
                     }
                   }
                 }
+                return null
+              })
 
-                // フォールバック: input[type="date"]を探す
-                const dateInput = document.querySelector('input[type="date"]')
-                if (dateInput) {
-                  dateInput.value = targetDate
-                  const events = ['input', 'change', 'blur']
-                  events.forEach(eventType => {
-                    const event = new Event(eventType, { bubbles: true, cancelable: true })
-                    dateInput.dispatchEvent(event)
-                  })
-                  console.log(`日付入力欄に値を設定しました: ${targetDate}`)
-                  return true
-                }
+              if (dateButton && dateButton.asElement) {
+                const buttonElement = dateButton.asElement()
+                if (buttonElement) {
+                  console.log('[Spotify] 日付ボタンを見つけました。クリックしてカレンダーピッカーを開きます...')
+                  await buttonElement.click()
 
-                // フォールバック: hidden inputを探す
-                const hiddenInputs = Array.from(document.querySelectorAll('input[type="hidden"]'))
-                for (const input of hiddenInputs) {
-                  const name = input.name || input.id || ''
-                  if (name.includes('date') || name.includes('Date')) {
-                    input.value = targetDate
-                    const changeEvent = new Event('change', { bubbles: true, cancelable: true })
-                    input.dispatchEvent(changeEvent)
-                    console.log(`hidden inputに値を設定しました: ${name} = ${targetDate}`)
-                    return true
+                  // カレンダーピッカーが表示されるまで待機
+                  await new Promise(resolve => setTimeout(resolve, 1000))
+
+                  try {
+                    // カレンダーピッカーが表示されているか確認
+                    await page.waitForSelector('.DayPicker', { timeout: 5000 })
+                    console.log('[Spotify] カレンダーピッカーが表示されました')
+
+                    // 目的の日付を選択
+                    const dateSelected = await page.evaluate((targetYear, targetMonth, targetDay) => {
+                      // 目的の日付のaria-labelを構築（例: "火曜日, 2025年12月16日"）
+                      const targetAriaLabel = `${targetYear}年${targetMonth}月${targetDay}日`
+
+                      // CalendarDay要素を探す
+                      const calendarDays = Array.from(document.querySelectorAll('.CalendarDay'))
+                      for (const day of calendarDays) {
+                        const ariaLabel = day.getAttribute('aria-label') || ''
+                        // aria-labelに目的の日付が含まれているか確認
+                        if (ariaLabel.includes(targetAriaLabel)) {
+                          // クリック可能か確認
+                          const isDisabled = day.getAttribute('aria-disabled') === 'true'
+                          if (!isDisabled) {
+                            day.click()
+                            console.log(`日付をクリックしました: ${ariaLabel}`)
+                            return true
+                          }
+                        }
+                      }
+
+                      // フォールバック: テキスト内容で探す
+                      for (const day of calendarDays) {
+                        const dayText = day.textContent.trim()
+                        if (dayText === String(targetDay)) {
+                          // 親要素のCalendarMonthから年月を確認
+                          const calendarMonth = day.closest('.CalendarMonth')
+                          if (calendarMonth) {
+                            const caption = calendarMonth.querySelector('.CalendarMonth_caption')
+                            if (caption) {
+                              const captionText = caption.textContent || ''
+                              if (captionText.includes(`${targetYear}年${targetMonth}月`)) {
+                                const isDisabled = day.getAttribute('aria-disabled') === 'true'
+                                if (!isDisabled) {
+                                  day.click()
+                                  console.log(`日付をクリックしました（フォールバック）: ${dayText}`)
+                                  return true
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+
+                      return false
+                    }, year, month, day)
+
+                    if (dateSelected) {
+                      console.log('[Spotify] カレンダー上で日付を選択しました')
+                      // カレンダーピッカーが閉じるまで少し待機
+                      await new Promise(resolve => setTimeout(resolve, 1000))
+                    } else {
+                      console.log('[Spotify] カレンダー上で目的の日付が見つかりませんでした。月を移動する必要があるかもしれません')
+
+                      // 月を移動して目的の日付を探す
+                      console.log('[Spotify] 目的の月まで移動します...')
+
+                      // 最大12回まで月を移動して目的の月を探す
+                      let monthFound = false
+                      for (let attempt = 0; attempt < 12; attempt++) {
+                        // 現在表示されている月を確認
+                        const currentDisplayedMonth = await page.evaluate((targetYear, targetMonth) => {
+                          const visibleMonths = Array.from(document.querySelectorAll('.CalendarMonth[data-visible="true"]'))
+                          for (const monthEl of visibleMonths) {
+                            const caption = monthEl.querySelector('.CalendarMonth_caption')
+                            if (caption) {
+                              const captionText = caption.textContent || ''
+                              if (captionText.includes(`${targetYear}年${targetMonth}月`)) {
+                                return true
+                              }
+                            }
+                          }
+                          return false
+                        }, year, month)
+
+                        if (currentDisplayedMonth) {
+                          monthFound = true
+                          console.log('[Spotify] 目的の月が見つかりました')
+                          break
+                        }
+
+                        // 目的の月が表示されていない場合、月を移動
+                        const monthMoved = await page.evaluate((targetYear, targetMonth) => {
+                          // 現在表示されている月を取得
+                          const visibleMonths = Array.from(document.querySelectorAll('.CalendarMonth[data-visible="true"]'))
+                          let currentMonth = null
+                          let currentYear = null
+
+                          for (const monthEl of visibleMonths) {
+                            const caption = monthEl.querySelector('.CalendarMonth_caption')
+                            if (caption) {
+                              const captionText = caption.textContent || ''
+                              const match = captionText.match(/(\d{4})年(\d{1,2})月/)
+                              if (match) {
+                                currentYear = parseInt(match[1])
+                                currentMonth = parseInt(match[2])
+                                break
+                              }
+                            }
+                          }
+
+                          if (currentMonth === null || currentYear === null) {
+                            return false
+                          }
+
+                          // ナビゲーションボタンを探す
+                          const navButtons = Array.from(document.querySelectorAll('.DayPickerNavigation_button'))
+                          const rightButton = navButtons.find(btn => {
+                            const ariaLabel = btn.getAttribute('aria-label') || ''
+                            return ariaLabel.includes('next') || ariaLabel.includes('forward')
+                          })
+                          const leftButton = navButtons.find(btn => {
+                            const ariaLabel = btn.getAttribute('aria-label') || ''
+                            return ariaLabel.includes('previous') || ariaLabel.includes('backward')
+                          })
+
+                          // 目的の月まで移動する方向を決定
+                          let moveButton = null
+                          if (currentYear < targetYear || (currentYear === targetYear && currentMonth < targetMonth)) {
+                            moveButton = rightButton
+                          } else if (currentYear > targetYear || (currentYear === targetYear && currentMonth > targetMonth)) {
+                            moveButton = leftButton
+                          }
+
+                          if (moveButton) {
+                            moveButton.click()
+                            return true
+                          }
+
+                          return false
+                        }, year, month)
+
+                        if (!monthMoved) {
+                          console.log('[Spotify] 月の移動に失敗しました')
+                          break
+                        }
+
+                        // 月移動後に少し待機
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                      }
+
+                      if (monthFound) {
+                        // 目的の月が見つかったら、再度日付を探す
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                        const dateSelectedAfterNav = await page.evaluate((targetYear, targetMonth, targetDay) => {
+                          const targetAriaLabel = `${targetYear}年${targetMonth}月${targetDay}日`
+                          const calendarDays = Array.from(document.querySelectorAll('.CalendarDay'))
+                          for (const day of calendarDays) {
+                            const ariaLabel = day.getAttribute('aria-label') || ''
+                            if (ariaLabel.includes(targetAriaLabel)) {
+                              const isDisabled = day.getAttribute('aria-disabled') === 'true'
+                              if (!isDisabled) {
+                                day.click()
+                                return true
+                              }
+                            }
+                          }
+                          return false
+                        }, year, month, day)
+
+                        if (dateSelectedAfterNav) {
+                          console.log('[Spotify] 月を移動して日付を選択しました')
+                          await new Promise(resolve => setTimeout(resolve, 1000))
+                        } else {
+                          console.log('[Spotify] 月を移動しましたが、日付の選択に失敗しました')
+                        }
+                      } else {
+                        console.log('[Spotify] 目的の月が見つかりませんでした')
+                      }
+                    }
+                  } catch (calendarError) {
+                    console.log('[Spotify] カレンダーピッカーの処理でエラーが発生しました:', calendarError.message)
                   }
+                } else {
+                  console.log('[Spotify] 日付ボタンの要素が見つかりませんでした')
                 }
-
-                return false
-              }, publishDate, year, month, day)
-
-              if (dateSet) {
-                console.log('[Spotify] 日付を直接設定しました')
-                await new Promise(resolve => setTimeout(resolve, 500))
               } else {
                 console.log('[Spotify] 日付ボタンが見つかりませんでした')
               }
