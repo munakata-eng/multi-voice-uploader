@@ -360,6 +360,63 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
 
       if (finalDescription) {
         try {
+          // HTMLモードに切り替える
+          console.log('[Spotify] HTMLモードに切り替え中...')
+          try {
+            // HTMLモードの切り替えスイッチを探す
+            const htmlToggleLabels = await page.$$('label[data-encore-id="formToggle"]')
+            let htmlToggleFound = false
+
+            for (const label of htmlToggleLabels) {
+              const labelText = await page.evaluate(el => el.textContent.trim(), label)
+              if (labelText.includes('HTML')) {
+                console.log('[Spotify] HTMLモードの切り替えスイッチを見つけました')
+                // チェックボックスを取得
+                const checkbox = await label.$('input[type="checkbox"]')
+                if (checkbox) {
+                  // チェック状態を確認
+                  const isChecked = await page.evaluate(el => el.checked, checkbox)
+                  if (!isChecked) {
+                    // チェックされていない場合はクリック
+                    await checkbox.click()
+                    console.log('[Spotify] HTMLモードに切り替えました')
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                  } else {
+                    console.log('[Spotify] すでにHTMLモードになっています')
+                  }
+                  htmlToggleFound = true
+                  break
+                }
+              }
+            }
+
+            // フォールバック: XPathで「HTML」を含むラベルを探す
+            if (!htmlToggleFound) {
+              console.log('[Spotify] フォールバック: XPathでHTMLモードの切り替えスイッチを探しています...')
+              const htmlLabels = await page.$x('//label[contains(text(), "HTML")]')
+              if (htmlLabels.length > 0) {
+                const checkbox = await htmlLabels[0].$('input[type="checkbox"]')
+                if (checkbox) {
+                  const isChecked = await page.evaluate(el => el.checked, checkbox)
+                  if (!isChecked) {
+                    await checkbox.click()
+                    console.log('[Spotify] HTMLモードに切り替えました（XPath）')
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                  } else {
+                    console.log('[Spotify] すでにHTMLモードになっています（XPath）')
+                  }
+                  htmlToggleFound = true
+                }
+              }
+            }
+
+            if (!htmlToggleFound) {
+              console.log('[Spotify] HTMLモードの切り替えスイッチが見つかりませんでした。続行します...')
+            }
+          } catch (htmlToggleError) {
+            console.log('[Spotify] HTMLモードの切り替えでエラーが発生しました（続行）:', htmlToggleError.message)
+          }
+
           // 複数のセレクターを試す（contenteditableのdivを優先）
           const descriptionSelectors = [
             '[name="description"][contenteditable="true"]',
