@@ -402,6 +402,26 @@ async function getPageInstance() {
     globalPage = null;
   }
 
+  // ページがblankページの場合はリセット（Windowsで既存のChromeと競合した場合の対策）
+  if (globalPage) {
+    try {
+      const currentUrl = globalPage.url();
+      if (currentUrl === 'about:blank' || currentUrl === '' || !currentUrl) {
+        console.log('Page is blank, creating new page');
+        try {
+          await globalPage.close();
+        } catch (e) {
+          // ページが既に閉じられている場合は無視
+        }
+        globalPage = null;
+      }
+    } catch (error) {
+      // ページの状態を取得できない場合は新しいページを作成
+      console.log('Cannot get page state, creating new page:', error.message);
+      globalPage = null;
+    }
+  }
+
   // ブラウザが存在しない場合は作成
   if (!globalBrowser) {
     if (!puppeteer) puppeteer = require('puppeteer')
@@ -427,6 +447,7 @@ async function getPageInstance() {
     }
 
     // ユーザーデータディレクトリのパスを設定
+    // Windowsで既存のChromeと競合しないように、アプリ専用のディレクトリを使用
     await fs.ensureDir(chromeUserDataDir);
 
     const launchOptions = {
@@ -458,7 +479,24 @@ async function getPageInstance() {
       console.log('Using Puppeteer bundled Chromium');
     }
 
-    globalBrowser = await puppeteer.launch(launchOptions);
+    try {
+      globalBrowser = await puppeteer.launch(launchOptions);
+    } catch (error) {
+      // Windowsで既存のChromeと競合した場合、userDataDirを変更して再試行
+      if (process.platform === 'win32' && error.message && (
+        error.message.includes('user data directory') ||
+        error.message.includes('already in use') ||
+        error.message.includes('locked')
+      )) {
+        console.log('Chrome user data directory conflict detected, using alternative directory');
+        const altUserDataDir = path.join(chromeUserDataDir, 'instance-' + Date.now());
+        await fs.ensureDir(altUserDataDir);
+        launchOptions.userDataDir = altUserDataDir;
+        globalBrowser = await puppeteer.launch(launchOptions);
+      } else {
+        throw error;
+      }
+    }
   }
 
   // ページが存在しない場合は作成
@@ -581,8 +619,41 @@ ipcMain.handle('copy-to-mp4', async (event, sourcePath) => {
 // 外部URLを開く
 ipcMain.handle('open-external-url', async (event, url) => {
   try {
-    const page = await getPageInstance();
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    let page = await getPageInstance();
+
+    // ページがblankの場合は新しいページを作成
+    try {
+      const currentUrl = page.url();
+      if (currentUrl === 'about:blank' || currentUrl === '' || !currentUrl) {
+        console.log('Page is blank, creating new page for URL:', url);
+        try {
+          await page.close();
+        } catch (e) {
+          // ページが既に閉じられている場合は無視
+        }
+        if (globalBrowser) {
+          globalPage = await globalBrowser.newPage();
+          page = globalPage;
+        }
+      }
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (gotoError) {
+      // gotoに失敗した場合、新しいページを作成して再試行
+      console.log('goto failed, creating new page and retrying:', gotoError.message);
+      try {
+        await page.close();
+      } catch (e) {
+        // ページが既に閉じられている場合は無視
+      }
+      if (globalBrowser) {
+        globalPage = await globalBrowser.newPage();
+        page = globalPage;
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      } else {
+        throw gotoError;
+      }
+    }
+
     // bring browser to front? Puppeteer doesn't have a direct API for this,
     // but launching usually brings it up.
     return { success: true };
