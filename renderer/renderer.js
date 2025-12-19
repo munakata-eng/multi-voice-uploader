@@ -826,7 +826,11 @@ async function saveFileMetadata() {
             spotifyPublished: platformSettings.spotify && formData.has('spotifyPublished')
         };
 
-        metadata[currentEditingFile] = fileMetadata;
+        // 既存のメタデータを保持しつつ、新しい値をマージ
+        metadata[currentEditingFile] = {
+            ...metadata[currentEditingFile],
+            ...fileMetadata
+        };
 
         const result = await ipcRenderer.invoke('save-metadata', metadata);
 
