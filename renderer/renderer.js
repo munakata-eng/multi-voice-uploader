@@ -140,6 +140,18 @@ function setupEventListeners() {
     } else {
         console.error('editModal要素が見つかりません');
     }
+
+    // Windowsで日本語入力を確実にするため、タイトル入力フィールドのフォーカス時にIMEを有効化
+    const editTitleInput = document.getElementById('editTitle');
+    if (editTitleInput) {
+        editTitleInput.addEventListener('focus', () => {
+            // Windowsの場合、IMEを有効にする
+            if (navigator.platform.indexOf('Win') !== -1) {
+                editTitleInput.setAttribute('ime-mode', 'active');
+                editTitleInput.style.imeMode = 'active';
+            }
+        });
+    }
 }
 
 // メタデータを読み込み
@@ -803,6 +815,18 @@ function editFile(basename) {
         }
 
         editModal.classList.remove('opacity-0', 'pointer-events-none');
+        
+        // Windowsで日本語入力を確実にするため、少し遅延してフォーカスを設定
+        setTimeout(() => {
+            const titleInput = document.getElementById('editTitle');
+            if (titleInput) {
+                titleInput.focus();
+                // IMEを有効にする（Windows用）
+                if (navigator.platform.indexOf('Win') !== -1) {
+                    titleInput.setAttribute('ime-mode', 'active');
+                }
+            }
+        }, 100);
     }
 }
 
