@@ -298,8 +298,30 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
       await fileInput.uploadFile(audioFilePath)
       console.log('[Spotify] 音声ファイルのアップロードが完了しました')
 
-      // アップロードが完了するまで少し待機
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // アップロード完了を待機：「新しいファイルをアップロード」ボタンが表示されるまで待つ
+      console.log('[Spotify] アップロード完了を待機中（「新しいファイルをアップロード」ボタンの表示を待機）...')
+      try {
+        // waitForFunctionでボタンが表示されるまで待つ
+        await page.waitForFunction(
+          () => {
+            // data-encore-id="buttonSecondary"のボタンを探す
+            const buttons = Array.from(document.querySelectorAll('button[data-encore-id="buttonSecondary"]'))
+            for (const button of buttons) {
+              const text = button.textContent.trim()
+              if (text.includes('新しいファイルをアップロード')) {
+                return true
+              }
+            }
+            return false
+          },
+          { timeout: 60000 }
+        )
+        console.log('[Spotify] アップロードが完了しました（「新しいファイルをアップロード」ボタンが表示されました）')
+      } catch (waitError) {
+        console.log('[Spotify] アップロード完了待機中にエラーが発生しました。処理を続行します:', waitError.message)
+        // エラーが発生しても少し待機してから続行
+        await new Promise(resolve => setTimeout(resolve, 3000))
+      }
 
       // 8) タイトルの設定
       console.log('[Spotify] ステップ8: タイトルの設定を開始...')
