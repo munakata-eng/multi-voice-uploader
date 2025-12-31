@@ -391,43 +391,133 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
           console.log('[Spotify] HTMLモードに切り替え中...')
           try {
             // HTMLモードの切り替えスイッチを探す
-            const htmlToggleLabels = await page.$$('label[data-encore-id="formToggle"]')
+            // 「説明」フォームグループ内のHTMLチェックボックスを特定する
             let htmlToggleFound = false
 
-            for (const label of htmlToggleLabels) {
-              const labelText = await page.evaluate(el => el.textContent.trim(), label)
-              if (labelText.includes('HTML')) {
-                console.log('[Spotify] HTMLモードの切り替えスイッチを見つけました')
-                // チェックボックスを取得
-                const checkbox = await label.$('input[type="checkbox"]')
-                if (checkbox) {
-                  // チェック状態を確認
-                  const isChecked = await page.evaluate(el => el.checked, checkbox)
-                  if (!isChecked) {
-                    // チェックされていない場合はクリック
-                    await checkbox.click()
-                    console.log('[Spotify] HTMLモードに切り替えました')
-                    await new Promise(resolve => setTimeout(resolve, 500))
-                  } else {
-                    console.log('[Spotify] すでにHTMLモードになっています')
+            // 方法1: フォームグループから探す（最も確実）
+            const formGroups = await page.$$('div[data-encore-id="formGroup"]')
+            for (const formGroup of formGroups) {
+              // フォームグループ内に「説明」というラベルがあるか確認
+              const hasDescriptionLabel = await page.evaluate((groupEl) => {
+                // フォームグループ全体のテキストから「説明」を探す（動的クラス名に依存しない）
+                const groupText = groupEl.textContent.trim()
+                return groupText.includes('説明')
+              }, formGroup)
+
+              if (hasDescriptionLabel) {
+                // 「説明」フォームグループ内のHTMLチェックボックスを探す
+                const htmlToggleLabel = await formGroup.$('label[data-encore-id="formToggle"]')
+                if (htmlToggleLabel) {
+                  // ラベルのテキストに「HTML」が含まれているか確認
+                  const labelText = await page.evaluate(el => el.textContent.trim(), htmlToggleLabel)
+                  const htmlRegex = /\bHTML\b/i
+                  if (htmlRegex.test(labelText)) {
+                    console.log('[Spotify] HTMLモードの切り替えスイッチを見つけました（フォームグループから）')
+                    const checkbox = await htmlToggleLabel.$('input[type="checkbox"]')
+                    if (checkbox) {
+                      const isChecked = await page.evaluate(el => el.checked, checkbox)
+                      if (!isChecked) {
+                        try {
+                          await htmlToggleLabel.click()
+                          console.log('[Spotify] ラベルをクリックしてHTMLモードに切り替えました')
+                        } catch (clickError) {
+                          console.log('[Spotify] ラベルのクリックに失敗したため、JavaScriptで直接状態を変更します')
+                          await page.evaluate((labelEl) => {
+                            const checkbox = labelEl.querySelector('input[type="checkbox"]')
+                            if (checkbox && !checkbox.checked) {
+                              checkbox.checked = true
+                              const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                              checkbox.dispatchEvent(changeEvent)
+                              const clickEvent = new Event('click', { bubbles: true, cancelable: true })
+                              checkbox.dispatchEvent(clickEvent)
+                              labelEl.dispatchEvent(clickEvent)
+                            }
+                          }, htmlToggleLabel)
+                          console.log('[Spotify] JavaScriptでHTMLモードに切り替えました')
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                      } else {
+                        console.log('[Spotify] すでにHTMLモードになっています')
+                      }
+                      htmlToggleFound = true
+                      break
+                    }
                   }
-                  htmlToggleFound = true
-                  break
                 }
               }
             }
 
-            // フォールバック: XPathで「HTML」を含むラベルを探す
+            // 方法2: フォールバック - 全てのformToggleラベルを確認
             if (!htmlToggleFound) {
-              console.log('[Spotify] フォールバック: XPathでHTMLモードの切り替えスイッチを探しています...')
-              const htmlLabels = await page.$x('//label[contains(text(), "HTML")]')
+              console.log('[Spotify] フォールバック: 全てのformToggleラベルを確認中...')
+              const htmlToggleLabels = await page.$$('label[data-encore-id="formToggle"]')
+              for (const label of htmlToggleLabels) {
+                const labelText = await page.evaluate(el => el.textContent.trim(), label)
+                const htmlRegex = /\bHTML\b/i
+                if (htmlRegex.test(labelText)) {
+                  console.log('[Spotify] HTMLモードの切り替えスイッチを見つけました（フォールバック）')
+                  const checkbox = await label.$('input[type="checkbox"]')
+                  if (checkbox) {
+                    const isChecked = await page.evaluate(el => el.checked, checkbox)
+                    if (!isChecked) {
+                      try {
+                        await label.click()
+                        console.log('[Spotify] ラベルをクリックしてHTMLモードに切り替えました')
+                      } catch (clickError) {
+                        console.log('[Spotify] ラベルのクリックに失敗したため、JavaScriptで直接状態を変更します')
+                        await page.evaluate((labelEl) => {
+                          const checkbox = labelEl.querySelector('input[type="checkbox"]')
+                          if (checkbox && !checkbox.checked) {
+                            checkbox.checked = true
+                            const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                            checkbox.dispatchEvent(changeEvent)
+                            const clickEvent = new Event('click', { bubbles: true, cancelable: true })
+                            checkbox.dispatchEvent(clickEvent)
+                            labelEl.dispatchEvent(clickEvent)
+                          }
+                        }, label)
+                        console.log('[Spotify] JavaScriptでHTMLモードに切り替えました')
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 500))
+                    } else {
+                      console.log('[Spotify] すでにHTMLモードになっています')
+                    }
+                    htmlToggleFound = true
+                    break
+                  }
+                }
+              }
+            }
+
+            // 方法3: XPathフォールバック
+            if (!htmlToggleFound) {
+              console.log('[Spotify] XPathフォールバック: HTMLモードの切り替えスイッチを探しています...')
+              // 「説明」を含むフォームグループ内のHTMLチェックボックスを探す
+              const htmlLabels = await page.$x('//div[@data-encore-id="formGroup"][.//label[contains(text(), "説明")]]//label[@data-encore-id="formToggle" and contains(text(), "HTML")]')
               if (htmlLabels.length > 0) {
-                const checkbox = await htmlLabels[0].$('input[type="checkbox"]')
+                const label = htmlLabels[0]
+                const checkbox = await label.$('input[type="checkbox"]')
                 if (checkbox) {
                   const isChecked = await page.evaluate(el => el.checked, checkbox)
                   if (!isChecked) {
-                    await checkbox.click()
-                    console.log('[Spotify] HTMLモードに切り替えました（XPath）')
+                    try {
+                      await label.click()
+                      console.log('[Spotify] ラベルをクリックしてHTMLモードに切り替えました（XPath）')
+                    } catch (clickError) {
+                      console.log('[Spotify] ラベルのクリックに失敗したため、JavaScriptで直接状態を変更します（XPath）')
+                      await page.evaluate((labelEl) => {
+                        const checkbox = labelEl.querySelector('input[type="checkbox"]')
+                        if (checkbox && !checkbox.checked) {
+                          checkbox.checked = true
+                          const changeEvent = new Event('change', { bubbles: true, cancelable: true })
+                          checkbox.dispatchEvent(changeEvent)
+                          const clickEvent = new Event('click', { bubbles: true, cancelable: true })
+                          checkbox.dispatchEvent(clickEvent)
+                          labelEl.dispatchEvent(clickEvent)
+                        }
+                      }, label)
+                      console.log('[Spotify] JavaScriptでHTMLモードに切り替えました（XPath）')
+                    }
                     await new Promise(resolve => setTimeout(resolve, 500))
                   } else {
                     console.log('[Spotify] すでにHTMLモードになっています（XPath）')
