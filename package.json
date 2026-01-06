@@ -1,6 +1,6 @@
 {
   "name": "multi-voice-uploader",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Multi Voice Uploader - 音声ファイルの文字起こしとアップロード管理ツール",
   "main": "main.js",
   "scripts": {
