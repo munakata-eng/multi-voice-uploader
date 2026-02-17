@@ -206,26 +206,18 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
 
       const { audioDir } = getAppPaths()
 
-      // 対応する音声ファイルのパスを構築
-      let audioFilePath = path.join(audioDir, basename + '.mp4')
-
-      // ファイルが存在するかチェック
-      if (!(await fs.pathExists(audioFilePath))) {
-        // .mp4が存在しない場合は.m4aを試す
-        const m4aFilePath = path.join(audioDir, basename + '.m4a')
-        if (await fs.pathExists(m4aFilePath)) {
-          audioFilePath = m4aFilePath
-          console.log('[Spotify] .mp4が見つからないため、.m4aを使用します')
-        } else {
-          // .mp3も試す
-          const mp3FilePath = path.join(audioDir, basename + '.mp3')
-          if (await fs.pathExists(mp3FilePath)) {
-            audioFilePath = mp3FilePath
-            console.log('[Spotify] .mp4/.m4aが見つからないため、.mp3を使用します')
-          } else {
-            throw new Error(`音声ファイルが見つかりません: ${basename}.mp4, ${basename}.m4a, ${basename}.mp3`)
-          }
+      // 対応する音声ファイルを拡張子の優先順で検索
+      const audioExts = ['.mp4', '.m4a', '.mp3', '.wav']
+      let audioFilePath = null
+      for (const ext of audioExts) {
+        const candidate = path.join(audioDir, basename + ext)
+        if (await fs.pathExists(candidate)) {
+          audioFilePath = candidate
+          break
         }
+      }
+      if (!audioFilePath) {
+        throw new Error(`音声ファイルが見つかりません: ${basename} (tried: ${audioExts.join(', ')})`)
       }
 
       console.log(`[Spotify] アップロードする音声ファイル: ${audioFilePath}`)

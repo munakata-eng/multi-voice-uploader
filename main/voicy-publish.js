@@ -212,18 +212,18 @@ function registerVoicyPublishHandler({ ipcMain, fs, path, getPageInstance, getAp
       // アップロードモーダルが表示されるまで待機
       await page.waitForSelector('input[type="file"][accept="audio/*"]', { timeout: 30000 })
 
-      // 対応するmp4ファイルのパスを構築
-      let audioFilePath = path.join(audioDir, basename + '.mp4')
-
-      // ファイルが存在するかチェック
-      if (!(await fs.pathExists(audioFilePath))) {
-        // .mp4が存在しない場合は.m4aを試す
-        const m4aFilePath = path.join(audioDir, basename + '.m4a')
-        if (await fs.pathExists(m4aFilePath)) {
-          audioFilePath = m4aFilePath
-        } else {
-          throw new Error(`Audio file not found: ${basename}.mp4 or ${basename}.m4a`)
+      // 対応する音声ファイルを拡張子の優先順で検索
+      const audioExts = ['.mp4', '.m4a', '.mp3', '.wav']
+      let audioFilePath = null
+      for (const ext of audioExts) {
+        const candidate = path.join(audioDir, basename + ext)
+        if (await fs.pathExists(candidate)) {
+          audioFilePath = candidate
+          break
         }
+      }
+      if (!audioFilePath) {
+        throw new Error(`Audio file not found: ${basename} (tried: ${audioExts.join(', ')})`)
       }
 
       console.log(`Uploading audio file: ${audioFilePath}`)
