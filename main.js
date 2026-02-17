@@ -358,16 +358,19 @@ ipcMain.handle('read-text-file', async (event, basename) => {
   }
 });
 
-// 音声ファイルを削除
+// 音声ファイルを削除（同一 basename の全拡張子の音声 + テキスト + メタデータ）
+const audioExtensions = ['.mp4', '.m4a', '.mp3', '.wav'];
 ipcMain.handle('delete-audio-file', async (event, { basename, filename }) => {
   try {
-    // ファイルパスの構築
-    const audioPath = path.join(audioDir, filename);
+    initPaths();
     const textPath = path.join(textDir, basename + '.txt');
     const mdPath = path.join(mdDir, basename + '.md');
 
-    // ファイルの削除 (存在する場合のみ)
-    if (await fs.pathExists(audioPath)) await fs.remove(audioPath);
+    // 同一 basename の音声ファイルを全拡張子で削除
+    for (const ext of audioExtensions) {
+      const audioPath = path.join(audioDir, basename + ext);
+      if (await fs.pathExists(audioPath)) await fs.remove(audioPath);
+    }
     if (await fs.pathExists(textPath)) await fs.remove(textPath);
     if (await fs.pathExists(mdPath)) await fs.remove(mdPath);
 
