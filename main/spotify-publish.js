@@ -206,15 +206,18 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
 
       const { audioDir } = getAppPaths()
 
-      // 対応する音声ファイルを拡張子の優先順で検索
+      // 対応する音声ファイルを拡張子の優先順で検索（大文字拡張子にも対応）
       const audioExts = ['.mp4', '.m4a', '.mp3', '.wav']
       let audioFilePath = null
       for (const ext of audioExts) {
-        const candidate = path.join(audioDir, basename + ext)
-        if (await fs.pathExists(candidate)) {
-          audioFilePath = candidate
-          break
+        const candidates = [path.join(audioDir, basename + ext), path.join(audioDir, basename + ext.toUpperCase())]
+        for (const candidate of candidates) {
+          if (await fs.pathExists(candidate)) {
+            audioFilePath = candidate
+            break
+          }
         }
+        if (audioFilePath) break
       }
       if (!audioFilePath) {
         throw new Error(`音声ファイルが見つかりません: ${basename} (tried: ${audioExts.join(', ')})`)

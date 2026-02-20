@@ -1451,12 +1451,11 @@
     "title": "lets_master_ai"
   },
   "20251210_ai_development_risk": {
+    "title": "ai_development_risk",
     "publishDate": "2025-12-10",
-    "voicyPublished": true,
     "standfmPublished": true,
-    "standfmPublishedDate": "2025-12-09T13:24:38.118Z",
-    "voicyPublishedDate": "2025-12-09T13:26:16.990Z",
-    "title": "ai_development_risk"
+    "voicyPublished": true,
+    "spotifyPublished": false
   },
   "（長いやつ）": {
     "publishDate": "2025-12-13",
@@ -1465,6 +1464,33 @@
   "20251215_gmail_update": {
     "title": "Gmailの更新について",
     "publishDate": "2025-12-20",
+    "standfmPublished": false,
+    "voicyPublished": false,
+    "spotifyPublished": false
+  },
+  "20251228_engineer_mind": {
+    "publishDate": "2025-12-28",
+    "title": "engineer_mind",
+    "spotifyPublished": false
+  },
+  "20260101_new_year": {
+    "publishDate": "2026-01-01",
+    "title": "年始雑談：2026年にやりたいこと",
+    "standfmPublished": false,
+    "voicyPublished": false,
+    "spotifyPublished": true,
+    "spotifyPublishedDate": "2025-12-31T08:48:49.760Z"
+  },
+  "20260217_x_api": {
+    "publishDate": "2026-02-18",
+    "title": "x_api",
+    "standfmPublished": false,
+    "voicyPublished": false,
+    "spotifyPublished": false
+  },
+  "20260220_": {
+    "publishDate": "2026-02-21",
+    "title": "test",
     "standfmPublished": false,
     "voicyPublished": false,
     "spotifyPublished": false

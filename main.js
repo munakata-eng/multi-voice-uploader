@@ -282,16 +282,17 @@ async function ensureDirectories() {
   await fs.ensureDir(chromeUserDataDir);
 }
 
+// 音声拡張子（大文字含め判定用）
+const AUDIO_EXT_LIST = ['.mp4', '.m4a', '.mp3', '.wav'];
+const isAudioFile = (filename) => AUDIO_EXT_LIST.some(ext => filename.toLowerCase().endsWith(ext));
+
 // 音声ファイル一覧を取得
 ipcMain.handle('get-audio-files', async () => {
   try {
     await ensureDirectories();
     const files = await fs.readdir(audioDir);
 
-    const audioFiles = files.filter(file =>
-      file.endsWith('.mp4') || file.endsWith('.m4a') ||
-      file.endsWith('.wav') || file.endsWith('.mp3')
-    );
+    const audioFiles = files.filter(file => isAudioFile(file));
 
     // メタデータを読み込み
     const metadata = await fs.pathExists(metadataPath) ? await fs.readJson(metadataPath) : {};
@@ -359,17 +360,17 @@ ipcMain.handle('read-text-file', async (event, basename) => {
 });
 
 // 音声ファイルを削除（同一 basename の全拡張子の音声 + テキスト + メタデータ）
-const audioExtensions = ['.mp4', '.m4a', '.mp3', '.wav'];
 ipcMain.handle('delete-audio-file', async (event, { basename, filename }) => {
   try {
     initPaths();
     const textPath = path.join(textDir, basename + '.txt');
     const mdPath = path.join(mdDir, basename + '.md');
 
-    // 同一 basename の音声ファイルを全拡張子で削除
-    for (const ext of audioExtensions) {
-      const audioPath = path.join(audioDir, basename + ext);
-      if (await fs.pathExists(audioPath)) await fs.remove(audioPath);
+    // 同一 basename の音声ファイルを全拡張子で削除（大文字拡張子も対象）
+    const dirFiles = await fs.readdir(audioDir);
+    for (const f of dirFiles) {
+      const p = path.parse(f);
+      if (p.name === basename && isAudioFile(f)) await fs.remove(path.join(audioDir, f));
     }
     if (await fs.pathExists(textPath)) await fs.remove(textPath);
     if (await fs.pathExists(mdPath)) await fs.remove(mdPath);
@@ -682,33 +683,22 @@ ipcMain.handle('transcribe-audio', async (event, basename) => {
   console.log('Transcribing audio for:', basename);
 
   try {
-    // ファイル名から拡張子を除去
+    initPaths();
     const nameWithoutExt = path.parse(basename).name;
 
-    // 対応可能な音声ファイル拡張子
-    const audioExtensions = ['.m4a', '.mp4', '.wav', '.mp3'];
-
-    // 実際のファイルを探す（拡張子付きのbasenameまたは拡張子なしbasename + 拡張子）
+    // 実際のファイルを探す（拡張子の大文字・小文字両方に対応）
     let audioFilePath = null;
-
-    // まず、basenameがそのままファイル名として存在するか確認
     const directPath = path.join(audioDir, basename);
     if (await fs.pathExists(directPath)) {
       audioFilePath = directPath;
     } else {
-      // 拡張子なしbasename + 各拡張子で確認
-      for (const ext of audioExtensions) {
-        const testPath = path.join(audioDir, nameWithoutExt + ext);
-        if (await fs.pathExists(testPath)) {
-          audioFilePath = testPath;
-          break;
-        }
-      }
+      const dirFiles = await fs.readdir(audioDir);
+      const found = dirFiles.find(f => path.parse(f).name === nameWithoutExt && isAudioFile(f));
+      if (found) audioFilePath = path.join(audioDir, found);
     }
 
-    // ファイルの存在確認
     if (!audioFilePath) {
-      throw new Error(`Audio file not found for: ${basename} (checked: ${basename} and ${nameWithoutExt} with extensions ${audioExtensions.join(', ')})`);
+      throw new Error(`Audio file not found for: ${basename} (checked: ${basename} and ${nameWithoutExt} with extensions ${AUDIO_EXT_LIST.join(', ')})`);
     }
 
     // 出力ディレクトリの確保
