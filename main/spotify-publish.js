@@ -303,7 +303,7 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
             const buttons = Array.from(document.querySelectorAll('button[data-encore-id="buttonSecondary"]'))
             for (const button of buttons) {
               const text = button.textContent.trim()
-              if (text.includes('新しいファイルをアップロード')) {
+              if (text.includes('新しいファイルをアップロード') || text.includes('Upload new file')) {
                 return true
               }
             }
@@ -700,7 +700,9 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
                 const buttonText = await page.evaluate(el => el.textContent.trim(), nextButton)
                 console.log(`[Spotify] ボタンが見つかりました。テキスト: "${buttonText}"`)
 
-                if (buttonText.includes('次へ')) {
+                if (buttonText.includes('次へ') || buttonText.includes('Next')) {
+                  await page.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), nextButton)
+                  await new Promise(resolve => setTimeout(resolve, 500))
                   await nextButton.click()
                   console.log('[Spotify] 「次へ」ボタンをクリックしました')
                   nextButtonClicked = true
@@ -908,7 +910,9 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
                       const buttonText = await page.evaluate(el => el.textContent.trim(), saveButton)
                       console.log(`[Spotify] ボタンが見つかりました。テキスト: "${buttonText}"`)
 
-                      if (buttonText.includes('保存')) {
+                      if (buttonText.includes('保存') || buttonText.includes('Save')) {
+                        await page.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), saveButton)
+                        await new Promise(resolve => setTimeout(resolve, 500))
                         await saveButton.click()
                         console.log('[Spotify] 保存ボタンをクリックしました')
                         saveButtonClicked = true
@@ -1690,7 +1694,9 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
               console.log(`[Spotify] ボタンが見つかりました。テキスト: "${buttonText}"`)
 
               // 「スケジュール」または「公開する」を含むボタンをクリック
-              if (buttonText.includes('スケジュール') || buttonText.includes('公開する') || buttonText.includes('公開') || buttonText.includes('Publish')) {
+              if (buttonText.includes('スケジュール') || buttonText.includes('Schedule') || buttonText.includes('公開する') || buttonText.includes('公開') || buttonText.includes('Publish')) {
+                await page.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), scheduleButton)
+                await new Promise(resolve => setTimeout(resolve, 500))
                 await scheduleButton.click()
                 console.log(`[Spotify] 「${buttonText}」ボタンをクリックしました`)
                 scheduleButtonClicked = true
@@ -1706,7 +1712,7 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
         if (!scheduleButtonClicked) {
           console.log('[Spotify] フォールバック1: XPathで「スケジュール」または「公開する」ボタンを探しています...')
           try {
-            const scheduleButtons = await page.$x('//button[contains(text(), "スケジュール") or contains(text(), "公開する") or contains(text(), "公開")]')
+            const scheduleButtons = await page.$x('//button[contains(text(), "スケジュール") or contains(text(), "Schedule") or contains(text(), "公開する") or contains(text(), "公開")]')
             if (scheduleButtons.length > 0) {
               await scheduleButtons[0].click()
               const buttonText = await page.evaluate(el => el.textContent.trim(), scheduleButtons[0])
@@ -1725,7 +1731,7 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
             const buttons = Array.from(document.querySelectorAll('button[type="submit"]'))
             const scheduleBtn = buttons.find(btn => {
               const text = btn.textContent.trim()
-              return text.includes('スケジュール') || text.includes('公開する') || text.includes('公開') || text.includes('Publish')
+              return text.includes('スケジュール') || text.includes('Schedule') || text.includes('公開する') || text.includes('公開') || text.includes('Publish')
             })
             return scheduleBtn
           })
