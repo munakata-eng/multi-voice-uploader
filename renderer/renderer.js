@@ -850,6 +850,9 @@ async function saveFileMetadata() {
             spotifyPublished: platformSettings.spotify && formData.has('spotifyPublished')
         };
 
+        // 最新のメタデータをファイルから読み直してからマージ（他の操作による変更を保持するため）
+        await loadMetadata();
+
         // 既存のメタデータを保持しつつ、新しい値をマージ
         metadata[currentEditingFile] = {
             ...metadata[currentEditingFile],
