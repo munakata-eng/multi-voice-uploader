@@ -1005,6 +1005,18 @@ function publishToVoicy(basename, initialDate) {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', () => executeVoicyPublish());
 
+        // チャプタータイトルへの貼り付け: 改行あり → 1行目をタイトル、2行目をURLに反映
+        const chapterTitleInput = document.getElementById('voicyChapterTitle');
+        chapterTitleInput.addEventListener('paste', (e) => {
+            const text = e.clipboardData.getData('text');
+            const lines = text.split(/\r?\n/);
+            if (lines.length >= 2 && lines[1].trim() !== '') {
+                e.preventDefault();
+                chapterTitleInput.value = lines[0].trim();
+                document.getElementById('voicyChapterUrl').value = lines[1].trim();
+            }
+        });
+
         // チャプタータイトルのデフォルト保存ボタン
         const saveTitleBtn = document.getElementById('saveVoicyTitleDefaultBtn');
         const newSaveTitleBtn = saveTitleBtn.cloneNode(true);
