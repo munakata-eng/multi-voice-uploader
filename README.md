@@ -2,6 +2,18 @@
 
 マークダウンファイルをMyaspメールマガジン用HTML形式に変換するPythonスクリプトです。
 
+## ビルド方法
+
+Mac用
+```
+npm run build
+```
+
+Windows用
+```
+npm run build -- --win --x64
+```
+
 ## 機能
 
 - マークダウンファイルをMyasp用HTML形式に変換
