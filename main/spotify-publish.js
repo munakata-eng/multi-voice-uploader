@@ -1,18 +1,22 @@
 function extractSpotifyShowIdFromUrl(urlString) {
   if (!urlString || typeof urlString !== 'string') return null
-  const match = urlString.match(/\/pod\/show\/([^/]+)(?:\/|$)/)
+  const match = urlString.match(/\/(?:pod\/show|home\/show|analytics\/show)\/([^/]+)(?:\/|$)/)
   return match ? match[1] : null
 }
 
 async function waitForUrlToContain(page, substr, timeoutMs) {
   const start = Date.now()
   let attemptCount = 0
+  let lastLoggedUrl = null
   console.log(`[Spotify] waitForUrlToContain開始: 検索文字列="${substr}", タイムアウト=${timeoutMs}ms`)
 
   while (Date.now() - start < timeoutMs) {
     attemptCount++
     const current = page.url()
-    console.log(`[Spotify] waitForUrlToContain 試行${attemptCount}: 現在URL="${current}"`)
+    if (current !== lastLoggedUrl || attemptCount % 20 === 1) {
+      console.log(`[Spotify] waitForUrlToContain 試行${attemptCount}: 現在URL="${current}"`)
+      lastLoggedUrl = current
+    }
 
     if (current && current.includes(substr)) {
       console.log(`[Spotify] waitForUrlToContain 成功: URLに"${substr}"が見つかりました`)
@@ -24,6 +28,186 @@ async function waitForUrlToContain(page, substr, timeoutMs) {
   const finalUrl = page.url()
   console.log(`[Spotify] waitForUrlToContain タイムアウト: 最終URL="${finalUrl}"`)
   return finalUrl
+}
+
+async function waitForSpotifyShowUrl(page, timeoutMs) {
+  const start = Date.now()
+  let attemptCount = 0
+  let lastLoggedUrl = null
+  console.log(`[Spotify] show URLへの遷移待機開始: タイムアウト=${timeoutMs}ms`)
+
+  while (Date.now() - start < timeoutMs) {
+    attemptCount++
+    const current = page.url()
+    if (current !== lastLoggedUrl || attemptCount % 20 === 1) {
+      console.log(`[Spotify] show URL待機 試行${attemptCount}: 現在URL="${current}"`)
+      lastLoggedUrl = current
+    }
+
+    if (extractSpotifyShowIdFromUrl(current)) {
+      console.log('[Spotify] show URLへの遷移を確認しました')
+      return current
+    }
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+
+  const finalUrl = page.url()
+  console.log(`[Spotify] show URL待機タイムアウト: 最終URL="${finalUrl}"`)
+  return finalUrl
+}
+
+async function clickSpotifyNewEpisodeButton(page) {
+  const start = Date.now()
+  const timeoutMs = 10000
+  let attemptCount = 0
+  let lastCandidateCount = null
+  console.log('[Spotify] 新しいエピソードボタンのDOM探索を開始します')
+
+  while (Date.now() - start < timeoutMs) {
+    attemptCount++
+    const frames = page.frames()
+    let totalCandidateCount = 0
+    const relatedByFrame = []
+
+    for (const frame of frames) {
+      let result
+      try {
+        result = await frame.evaluate(() => {
+          const candidates = Array.from(document.querySelectorAll('a, button'))
+          const details = candidates.map(el => {
+            const text = (el.textContent || '').trim()
+            const ariaLabel = el.getAttribute('aria-label') || ''
+            const testId = el.getAttribute('data-testid') || ''
+            const href = el.getAttribute('href') || ''
+            const encoreId = el.getAttribute('data-encore-id') || ''
+
+            return {
+              ariaLabel,
+              encoreId,
+              href,
+              tagName: el.tagName,
+              testId,
+              text
+            }
+          })
+
+          const targetIndex = details.findIndex(item => {
+            const text = item.text || ''
+            const ariaLabel = item.ariaLabel || ''
+            const testId = item.testId || ''
+            const href = item.href || ''
+
+            return testId === 'new-episode-button' ||
+              ariaLabel.includes('新しいエピソード') ||
+              text.includes('新しいエピソード') ||
+              href.includes('/episode/wizard')
+          })
+
+          if (targetIndex === -1) {
+            const related = details
+              .filter(item => {
+                const joined = `${item.testId} ${item.ariaLabel} ${item.href} ${item.text}`
+                return joined.includes('episode') ||
+                  joined.includes('エピソード') ||
+                  joined.includes('wizard')
+              })
+              .slice(0, 10)
+
+            return {
+              clicked: false,
+              candidateCount: candidates.length,
+              related
+            }
+          }
+
+          const target = candidates[targetIndex]
+          const info = details[targetIndex]
+          target.scrollIntoView({ behavior: 'instant', block: 'center' })
+          target.click()
+
+          return {
+            clicked: true,
+            candidateCount: candidates.length,
+            info
+          }
+        })
+      } catch (frameError) {
+        result = {
+          clicked: false,
+          candidateCount: 0,
+          frameError: frameError.message,
+          related: []
+        }
+      }
+
+      totalCandidateCount += result.candidateCount || 0
+
+      if (result.clicked) {
+        console.log('[Spotify] 新しいエピソードボタンをクリックしました:', JSON.stringify({
+          frameUrl: frame.url(),
+          info: result.info
+        }, null, 2))
+        return true
+      }
+
+      if (result.related && result.related.length > 0) {
+        relatedByFrame.push({
+          frameUrl: frame.url(),
+          related: result.related
+        })
+      }
+    }
+
+    if (totalCandidateCount !== lastCandidateCount || attemptCount % 10 === 1) {
+      console.log(`[Spotify] 新しいエピソードボタン未検出: 試行${attemptCount}, フレーム数=${frames.length}, 候補要素数=${totalCandidateCount}`)
+      if (relatedByFrame.length > 0) {
+        console.log('[Spotify] 関連しそうな要素:', JSON.stringify(relatedByFrame, null, 2))
+      }
+      lastCandidateCount = totalCandidateCount
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
+  return false
+}
+
+async function navigateToSpotifyWizardFromPage(page, wizardUrl) {
+  const wizardPath = new URL(wizardUrl).pathname
+  console.log('[Spotify] フォールバック: ページ内リンククリックで /episode/wizard へ遷移します:', wizardPath)
+
+  try {
+    await page.evaluate((path) => {
+      const link = document.createElement('a')
+      link.href = path
+      link.setAttribute('data-testid', 'codex-generated-new-episode-link')
+      link.textContent = '新しいエピソード'
+      link.style.position = 'fixed'
+      link.style.left = '0'
+      link.style.top = '0'
+      link.style.zIndex = '2147483647'
+      document.body.appendChild(link)
+      link.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      }))
+      link.remove()
+    }, wizardPath)
+    return true
+  } catch (error) {
+    console.log('[Spotify] ページ内リンククリックでの遷移に失敗しました:', error.message)
+  }
+
+  try {
+    await page.evaluate((path) => {
+      window.location.assign(path)
+    }, wizardPath)
+    return true
+  } catch (error) {
+    console.log('[Spotify] location.assignでの遷移に失敗しました:', error.message)
+    return false
+  }
 }
 
 function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, getAppPaths }) {
@@ -141,13 +325,13 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
         }
 
         if (buttonFound) {
-          // クリック後、/pod/show/... に遷移するまで待つ
-          currentUrl = await waitForUrlToContain(page, '/pod/show/', 60000)
+          // クリック後、/pod/show/... または /home/show/... に遷移するまで待つ
+          currentUrl = await waitForSpotifyShowUrl(page, 60000)
           console.log('[Spotify] 遷移完了。現在のURL:', currentUrl)
         } else {
           // ログインボタンが見つからない場合、自動リダイレクトを待つ
           console.log('[Spotify] ログインボタンが見つかりませんでした。自動リダイレクトを待機中...')
-        currentUrl = await waitForUrlToContain(page, '/pod/show/', 60000)
+          currentUrl = await waitForSpotifyShowUrl(page, 60000)
           console.log('[Spotify] 自動リダイレクト後のURL:', currentUrl)
         }
       } else {
@@ -189,17 +373,25 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
       currentUrl = page.url()
       console.log('[Spotify] /home遷移後の現在URL:', currentUrl)
 
-      // 6) /episode/wizard に移動
+      // 6) サイドナビの「新しいエピソード」ボタンを押して /episode/wizard に移動
       const wizardUrl = `https://creators.spotify.com/pod/show/${showId}/episode/wizard`
-      console.log('[Spotify] ステップ6: /episode/wizardへ遷移中...')
-      console.log('[Spotify] 目標URL:', wizardUrl)
+      console.log('[Spotify] ステップ6: 「新しいエピソード」ボタンをクリックして /episode/wizard へ遷移します...')
 
-      await page.goto(wizardUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
-      console.log('[Spotify] goto完了。現在のURL:', page.url())
+      const newEpisodeButtonClicked = await clickSpotifyNewEpisodeButton(page)
+      if (!newEpisodeButtonClicked) {
+        console.log('[Spotify] 「新しいエピソード」ボタンが見つからなかったため、ページ内遷移フォールバックを試します')
+        const fallbackNavigated = await navigateToSpotifyWizardFromPage(page, wizardUrl)
+        if (!fallbackNavigated) {
+          throw new Error('Spotifyの「新しいエピソード」ボタンが見つからず、フォールバック遷移にも失敗しました')
+        }
+      }
 
-      // 遷移完了を待つ
-      const wizardFinalUrl = await waitForUrlToContain(page, '/episode/wizard', 10000)
+      // クリック後の遷移完了を待つ
+      const wizardFinalUrl = await waitForUrlToContain(page, '/episode/wizard', 30000)
       console.log('[Spotify] /episode/wizardへの遷移完了。最終URL:', wizardFinalUrl)
+      if (!wizardFinalUrl.includes('/episode/wizard')) {
+        throw new Error(`「新しいエピソード」ボタンをクリックしましたが、作成ページに遷移できませんでした。現在URL: ${wizardFinalUrl}`)
+      }
 
       // 7) 音声ファイルのアップロード
       console.log('[Spotify] ステップ7: 音声ファイルのアップロードを開始...')
@@ -1788,4 +1980,3 @@ function registerSpotifyPublishHandler({ ipcMain, fs, path, getPageInstance, get
 }
 
 module.exports = { registerSpotifyPublishHandler }
-
