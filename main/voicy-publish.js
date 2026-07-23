@@ -209,8 +209,8 @@ function registerVoicyPublishHandler({ ipcMain, fs, path, getPageInstance, getAp
 
       console.log('Audio upload button clicked')
 
-      // アップロードモーダルが表示されるまで待機
-      await page.waitForSelector('input[type="file"][accept="audio/*"]', { timeout: 30000 })
+      // アップロードモーダルが表示されるまで待機（accept属性は "audio/*" や "audio/*,.m4a" などの表記揺れに対応）
+      await page.waitForSelector('input[type="file"][accept*="audio"]', { timeout: 30000 })
 
       // 対応する音声ファイルを拡張子の優先順で検索（大文字拡張子にも対応）
       const audioExts = ['.mp4', '.m4a', '.mp3', '.wav']
@@ -232,10 +232,18 @@ function registerVoicyPublishHandler({ ipcMain, fs, path, getPageInstance, getAp
       console.log(`Uploading audio file: ${audioFilePath}`)
 
       // ファイルをアップロード
-      const fileInput = await page.$('input[type="file"][accept="audio/*"]')
+      const fileInput = await page.$('input[type="file"][accept*="audio"]')
       await fileInput.uploadFile(audioFilePath)
 
       console.log('Audio file uploaded successfully')
+
+      // アップロードモーダルが閉じるまで待機（閉じない場合もあるためタイムアウトは無視して続行）
+      try {
+        await page.waitForSelector('modal-container.is-uploader, .article-item-modal.is-uploader', { hidden: true, timeout: 60000 })
+        console.log('Upload modal closed')
+      } catch (e) {
+        console.warn('Upload modal did not close within timeout, continuing:', e.message)
+      }
 
       // アップロードが完了するまで少し待機
       await new Promise(resolve => setTimeout(resolve, 3000))
